@@ -43,7 +43,7 @@ def task_create_json():
             filter = os.path.join(source,cfg['paths']['imagewild'])
             yield {
                 'name':item,
-                'actions':[f'"{exifpath}" -json {filter} > {target}'],
+                'actions':[f'"{exifpath}" -json "{filter}"" > "{target}"'],
                 'targets':[target],
                 'uptodate': [True],
                 'clean':True,
