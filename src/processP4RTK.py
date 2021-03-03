@@ -145,8 +145,8 @@ def task_plot_surveys():
         def process_survey(dependencies, targets,apikey):
             drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
             px.set_mapbox_access_token(apikey)
-            fig = px.scatter_mapbox(drone, hover_name='survey', lat="Latitude", lon="Longitude",  
-                                    mapbox_style="satellite-streets",color="survey", size_max=30, zoom=10)
+            fig = px.scatter_mapbox(drone, hover_name='Survey', lat="Latitude", lon="Longitude",  
+                                    mapbox_style="satellite-streets",color="Survey", size_max=30, zoom=10)
             fig.update_layout(mapbox_style="satellite-streets")
             plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
             
