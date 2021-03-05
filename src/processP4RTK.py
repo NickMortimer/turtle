@@ -8,9 +8,12 @@ import yaml
 import pandas as pd
 from doit import get_var
 from doit.tools import run_once
+from doit import create_after
 import numpy as np
 import plotly
 import plotly.express as px
+from getbase import getbasenames
+from getbase import getbase
 
 
 
@@ -48,7 +51,8 @@ def task_create_json():
                 'uptodate': [True],
                 'clean':True,
             }
-        
+    
+@create_after(executed='create_json', target_regex='.*\exif.json')    
 def task_process_json():
         def process_json(dependencies, targets):
             source_file = list(dependencies)[0]
@@ -63,7 +67,7 @@ def task_process_json():
             drone.loc[ ~drone['GPSLongitude'].isna(),'Longitude']=drone.loc[ ~drone['GPSLongitude'].isna(),'GPSLongitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
             drone.loc[ ~drone['GPSLatitude'].isna(),'Latitude']=drone.loc[ ~drone['GPSLatitude'].isna(),'GPSLatitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
             drone.loc[drone['GPSLatitudeRef']=='South','Latitude'] =drone.loc[drone['GPSLatitudeRef']=='South','Latitude']*-1
-            drone = drone[wanted]
+            drone = drone[drone.columns[drone.columns.isin(wanted)]]
             drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
             drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
@@ -139,8 +143,10 @@ def task_split_surveys():
             'targets':targets,
             'clean':True,
         }    
-        
-        
+
+
+      
+ 
 def task_plot_surveys():
         def process_survey(dependencies, targets,apikey):
             drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
