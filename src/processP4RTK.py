@@ -14,6 +14,8 @@ import plotly
 import plotly.express as px
 from getbase import getbasenames
 from getbase import getbase
+import geopandas as gp
+from geopandas.tools import sjoin
 
 
 
@@ -144,8 +146,61 @@ def task_split_surveys():
             'clean':True,
         }    
 
+def task_make_area_list():
+        def split(path):
+            keys =os.path.split(os.path.dirname(path))[-1].split('_')
+            return {'SurveyCode':keys[0],'SurveyLongName':keys[1],'file':path}
+        
+        def process_area_list(dependencies, targets):
+            areas = pd.DataFrame.from_records([split(shape) for shape in dependencies])
+            areas.to_csv(targets[0],index=False)                
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['surveyarea']),'**/*.shp'),recursive=True)
+        target = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveyareas.csv')
+        return {
+            'actions':[process_area_list],
+            'file_dep':file_dep,
+            'targets':[target],
+            'clean':True,
+        } 
+           
+def task_assign_area():
+        def load_shape(row):
+            area = gp.read_file(row.file)
+            area.id = row.SurveyCode
+            return area
+        
+        def process_assign_area(dependencies, targets):
+            drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
+            areas =pd.read_csv(dependencies[1])
+            shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
+            pnts = sjoin(pnts, shapes, how='left')
+            pnts.to_csv(targets[0])
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = [os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveys.csv'),
+                    os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveyareas.csv')]
+        target = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveyswitharea.csv')
+        return {
+            'actions':[process_assign_area],
+            'file_dep':file_dep,
+            'targets':[target],
+            'clean':True,
+        }       
+        
+        
 
-      
+# def task_calculate_newname():
+#     pass
+#xifdata.apply(lambda item: f"{survey['dronetype']}_{survey['camera']}_{survey['country']}_{survey['surveycode']}_{survey['surveynumber']:03}_{item.LocalTime}_{item.Counter:04}.JPG", axis=1)       
  
 def task_plot_surveys():
         def process_survey(dependencies, targets,apikey):

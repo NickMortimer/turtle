@@ -647,3 +647,5 @@
 'unzip_base:T:\\drone\\raw/gnss\\EXMT00AUS_R_20203080000_01D_30S_MN.rnx.gz', (516096, 298)
 'unzip_base:T:\\drone\\raw/gnss\\EXMT00AUS_R_20203030000_01D_30S_MN.rnx.gz', (516608, 298)
 'unzip_base:T:\\drone\\raw/gnss\\EXMT00AUS_R_20203020000_01D_30S_MN.rnx.gz', (517120, 297)
+'make_area_list', (517632, 2558)
+'assign_area', (520192, 339)

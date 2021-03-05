@@ -1,0 +1,12 @@
+SurveyCode,SurveyLongName,file
+TKB,Tang Khen Bay,T:\drone\raw\survey_area\TKB_Tang Khen Bay_survey area\TH_TKB_surveyarea.shp
+Nok,Koh Nok,T:\drone\raw\survey_area\Nok_Koh Nok_survey area\Koh Nok_survey area.shp
+Kham,Ao Kham,T:\drone\raw\survey_area\Kham_Ao Kham_survey area\Ao Kham_survey area.shp
+Tai,Ban Tai,T:\drone\raw\survey_area\Tai_Ban Tai_survey area\Ban Tai_survey area.shp
+LYL,Laem Yong Lam,T:\drone\raw\survey_area\LYL_Laem Yong Lam_survey area\LYL_survey area.shp
+PK,Pa Klok,T:\drone\raw\survey_area\PK_Pa Klok_survey area\Pa Klok_survey area.shp
+Noi,Lipa Noi,T:\drone\raw\survey_area\Noi_Lipa Noi_survey area\Lipa Noi_survey area.shp
+Nai,Tae Nai,T:\drone\raw\survey_area\Nai_Tae Nai_survey area\Tae Nai_survey area.shp
+Yai,Laem Yai,T:\drone\raw\survey_area\Yai_Laem Yai_survey area\Laem Yai_survey area.shp
+Pang,Pang Ga,T:\drone\raw\survey_area\Pang_Pang Ga_survey area\Pang Ga_survey area.shp
+TTN,Tong Ta Nod,T:\drone\raw\survey_area\TTN_Tong Ta Nod_survey area\Tong Ta Nod_survey area.shp
