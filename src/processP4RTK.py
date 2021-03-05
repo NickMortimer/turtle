@@ -175,9 +175,10 @@ def task_assign_area():
             return area
         
         def process_assign_area(dependencies, targets):
-            drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            dependencies.sort()
+            drone =pd.read_csv(dependencies[1],index_col='TimeStamp',parse_dates=['TimeStamp'])
             pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
-            areas =pd.read_csv(dependencies[1])
+            areas =pd.read_csv(dependencies[0])
             shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
             pnts = sjoin(pnts, shapes, how='left')
             pnts.to_csv(targets[0])
