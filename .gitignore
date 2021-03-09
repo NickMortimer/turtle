@@ -109,3 +109,6 @@ worker-*
 slurm-*
 dask-worker*
 .idea/
+
+# doit database
+.doit*
