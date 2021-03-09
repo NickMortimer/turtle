@@ -195,6 +195,7 @@ def task_assign_area():
             areas =pd.read_csv(dependencies[0])
             shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
             pnts = sjoin(pnts, shapes, how='left')
+            pnts['id'] =pnts['id'].fillna('NOAREA')
             pnts.to_csv(targets[0])
             
         config = {"config": get_var('config', 'NO')}
