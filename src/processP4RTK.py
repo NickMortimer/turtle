@@ -226,14 +226,15 @@ def task_make_surveys():
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
         file_dep = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveyswitharea.csv')
-        surveys =pd.read_csv(file_dep,index_col='TimeStamp',parse_dates=['TimeStamp']).groupby('Survey')
-        targets = [os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id.min()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv') for name,data in surveys]
-        return {
-            'actions':[(process_surveys,[],{'cfg':cfg})],
-            'file_dep':[file_dep],
-            'targets':targets,
-            'clean':True,
-        }         
+        if os.path.exists(file_dep):
+            surveys =pd.read_csv(file_dep,index_col='TimeStamp',parse_dates=['TimeStamp']).groupby('Survey')
+            targets = [os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id.min()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv') for name,data in surveys]
+            return {
+                'actions':[(process_surveys,[],{'cfg':cfg})],
+                'file_dep':[file_dep],
+                'targets':targets,
+                'clean':True,
+            }         
         
         
 
