@@ -16,6 +16,7 @@ from getbase import getbasenames
 from getbase import getbase
 import geopandas as gp
 from geopandas.tools import sjoin
+from read_rtk import read_mrk
 
 
 
@@ -56,8 +57,9 @@ def task_create_json():
     
 @create_after(executed='create_json', target_regex='.*\exif.json')    
 def task_process_json():
-        def process_json(dependencies, targets):
-            source_file = list(dependencies)[0]
+        def process_json(dependencies, targets,rtk=False):
+            dependencies.sort()
+            source_file = list(dependencies)[1]
             print('source file is: {0}'.format(source_file))
             print('output dir is: {0}'.format(list(targets)[0]))
             drone = pd.read_json(source_file)
@@ -71,6 +73,11 @@ def task_process_json():
             drone.loc[drone['GPSLatitudeRef']=='South','Latitude'] =drone.loc[drone['GPSLatitudeRef']=='South','Latitude']*-1
             drone = drone[drone.columns[drone.columns.isin(wanted)]]
             drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
+            if rtk:
+                mrk =read_mrk(dependencies[0])
+                drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d\d\d\d)\.JPG').astype(int)
+                drone.set_index('Sequence',inplace=True)
+                drone =drone.join(mrk,rsuffix='Mrk')
             drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
             drone = drone[pd.notna(drone.index)]
@@ -82,12 +89,16 @@ def task_process_json():
         basepath = os.path.dirname(config['config'])
         for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource']),recursive=True):
             source = os.path.join(basepath,os.path.dirname(item))
-            file_dep  = os.path.join(source,'exif.json')
+            file_dep  = [os.path.join(source,'exif.json')]
+            mark = glob.glob(os.path.join(source,'*Timestamp.MRK'))
+            if mark:
+                file_dep.append(mark[0])
+                #file_dep = tuple(file_dep)
             target =   os.path.join(source,'exif.csv')           
             yield {
                 'name':source,
-                'actions':[process_json],
-                'file_dep':[file_dep],
+                'actions':[(process_json,[],{'rtk':bool(mark)})],
+                'file_dep':file_dep,
                 'targets':[target],
                 'clean':True,
             }
@@ -133,6 +144,7 @@ def task_split_surveys():
             position =position.join([starttime,endtime,count])
             position.to_csv(targets[0],index=True)
             
+            
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
@@ -144,7 +156,9 @@ def task_split_surveys():
             'file_dep':[file_dep],
             'targets':targets,
             'clean':True,
-        }    
+        }  
+        
+          
 
 def task_make_area_list():
         def split(path):
@@ -196,6 +210,30 @@ def task_assign_area():
             'targets':[target],
             'clean':True,
         }       
+        
+def task_make_surveys():
+        def process_surveys(dependencies, targets,cfg):
+            drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            for name,data in drone.groupby('Survey'):
+                data['Counter'] = 1
+                data['Counter'] = data['Counter'].cumsum()
+                data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
+                filename = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id.min()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv')                
+                data.to_csv(filename,index=True)
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveyswitharea.csv')
+        surveys =pd.read_csv(file_dep,index_col='TimeStamp',parse_dates=['TimeStamp']).groupby('Survey')
+        targets = [os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id.min()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv') for name,data in surveys]
+        return {
+            'actions':[(process_surveys,[],{'cfg':cfg})],
+            'file_dep':[file_dep],
+            'targets':targets,
+            'clean':True,
+        }         
         
         
 

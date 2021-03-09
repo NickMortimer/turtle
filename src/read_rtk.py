@@ -95,21 +95,21 @@ def imagenames(filename):
     data.set_index('Sequence',inplace=True)
     return data
 
-filename = r"T:/drone/raw/card0/SURVEY/100_0001/100_0001_Timestamp.MRK"
-inputpath =os.path.split(filename)[0]
-jsonfile = inputpath+'/exif.json'
-merge = inputpath+'/merge.csv'
-exiftool = f'""D:/exiftool/exiftool(-k).exe" -r -ext JPG -a -json {inputpath} > {jsonfile}"'
-# if not os.path.exists(exiftool):
-#     os.system(exiftool)
-mrk =read_mrk(filename)
-get_base(mrk.UTCtime.round('1D').unique())
-images = imagenames(filename)
-json = pd.read_json(jsonfile)
-json['Squence']=json.SourceFile.str.extract('(?P<Sequence>\d\d\d\d)\.JPG').astype(int)
-json.set_index('Squence',inplace=True)
-json['Sequence'] =json.SourceFile.str.extract('(?P<Sequence>\d\d\d\d)\.JPG').astype(int)
-json.set_index('Sequence',inplace=True)
-json =json.join(mrk)
-json.to_csv(merge,index=True)
-json = json[json.SourceFile.str.contains('SURVEY')]
+# filename = r"T:/drone/raw/card0/SURVEY/100_0001/100_0001_Timestamp.MRK"
+# inputpath =os.path.split(filename)[0]
+# jsonfile = inputpath+'/exif.json'
+# merge = inputpath+'/merge.csv'
+# exiftool = f'""D:/exiftool/exiftool(-k).exe" -r -ext JPG -a -json {inputpath} > {jsonfile}"'
+# # if not os.path.exists(exiftool):
+# #     os.system(exiftool)
+# mrk =read_mrk(filename)
+# get_base(mrk.UTCtime.round('1D').unique())
+# images = imagenames(filename)
+# json = pd.read_json(jsonfile)
+# json['Squence']=json.SourceFile.str.extract('(?P<Sequence>\d\d\d\d)\.JPG').astype(int)
+# json.set_index('Squence',inplace=True)
+# json['Sequence'] =json.SourceFile.str.extract('(?P<Sequence>\d\d\d\d)\.JPG').astype(int)
+# json.set_index('Sequence',inplace=True)
+# json =json.join(mrk)
+# json.to_csv(merge,index=True)
+# json = json[json.SourceFile.str.contains('SURVEY')]
