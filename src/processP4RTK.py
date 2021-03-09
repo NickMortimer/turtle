@@ -58,8 +58,8 @@ def task_create_json():
 @create_after(executed='create_json', target_regex='.*\exif.json')    
 def task_process_json():
         def process_json(dependencies, targets,rtk=False):
-            dependencies.sort()
-            source_file = list(dependencies)[1]
+            # dependencies.sort()
+            source_file = list(dependencies)[0]
             print('source file is: {0}'.format(source_file))
             print('output dir is: {0}'.format(list(targets)[0]))
             drone = pd.read_json(source_file)
@@ -73,12 +73,12 @@ def task_process_json():
             drone.loc[drone['GPSLatitudeRef']=='South','Latitude'] =drone.loc[drone['GPSLatitudeRef']=='South','Latitude']*-1
             drone = drone[drone.columns[drone.columns.isin(wanted)]]
             drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
-            if rtk:
-                mrk =read_mrk(dependencies[0])
-                drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d\d\d\d)\.JPG').astype(int)
-                drone.set_index('Sequence',inplace=True)
-                drone =drone.join(mrk,rsuffix='Mrk')
-            drone.set_index('TimeStamp',inplace=True)
+            # if rtk:
+            #     mrk =read_mrk(dependencies[0])
+            #     drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d\d\d\d)\.JPG').astype(int)
+            #     drone.set_index('Sequence',inplace=True)
+            #     drone =drone.join(mrk,rsuffix='Mrk')
+            # drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
             drone = drone[pd.notna(drone.index)]
             drone.to_csv(list(targets)[0],index=True)
