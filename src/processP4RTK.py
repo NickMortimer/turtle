@@ -91,9 +91,9 @@ def task_process_json():
             source = os.path.join(basepath,os.path.dirname(item))
             file_dep  = [os.path.join(source,'exif.json')]
             mark = glob.glob(os.path.join(source,'*Timestamp.MRK'))
-            if mark:
-                file_dep.append(mark[0])
-                #file_dep = tuple(file_dep)
+            # if mark:
+            #     file_dep.append(mark[0])
+            #     #file_dep = tuple(file_dep)
             target =   os.path.join(source,'exif.csv')           
             yield {
                 'name':source,
@@ -195,7 +195,8 @@ def task_assign_area():
             areas =pd.read_csv(dependencies[0])
             shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
             pnts = sjoin(pnts, shapes, how='left')
-            pnts['id'] =pnts['id'].fillna('NOAREA')
+            pnts =pnts.join(pnts.groupby('Survey')['id'].max(),on='Survey',rsuffix='_fill')
+            pnts['id'] =pnts['id_fill'].fillna('NOAREA')
             pnts.to_csv(targets[0])
             
         config = {"config": get_var('config', 'NO')}
