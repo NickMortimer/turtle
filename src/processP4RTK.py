@@ -199,7 +199,7 @@ def task_assign_area():
             pnts = sjoin(pnts, shapes, how='left')
             pnts.loc[pnts.id.isna(),'id']=''
             pnts =pnts.join(pnts.groupby('Survey')['id'].max(),on='Survey',rsuffix='_fill')
-            pnts.loc[pnts.id=='','id'] ='NOAREA'
+            pnts.loc[pnts.id=='','id_fill'] ='NOAREA'
             pnts.to_csv(targets[0])
             
         config = {"config": get_var('config', 'NO')}
@@ -222,8 +222,8 @@ def task_make_surveys():
             for name,data in drone.groupby('Survey'):
                 data['Counter'] = 1
                 data['Counter'] = data['Counter'].cumsum()
-                data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
-                filename = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id.min()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv')                
+                data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id_fill}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
+                filename = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id_fill.min()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv')                
                 data.to_csv(filename,index=True)
             
         config = {"config": get_var('config', 'NO')}
