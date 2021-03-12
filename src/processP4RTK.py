@@ -188,6 +188,10 @@ def task_assign_area():
             area.id = row.SurveyCode
             return area
         
+        def setarea(group):
+            group['id'] = group['id'].value_counts().index[0]
+            return group
+        
         def process_assign_area(dependencies, targets):
             surveyfile = list(filter(lambda x: 'surveys.csv' in x, dependencies))[0]
             areafile = list(filter(lambda x: 'surveyareas.csv' in x, dependencies))[0]
@@ -198,8 +202,8 @@ def task_assign_area():
             shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
             pnts = sjoin(pnts, shapes, how='left')
             pnts.loc[pnts.id.isna(),'id']=''
-            pnts =pnts.join(pnts.groupby('Survey')['id'].max(),on='Survey',rsuffix='_fill')
-            pnts.loc[pnts.id=='','id_fill'] ='NOAREA'
+            pnts =pnts.groupby('Survey').apply(setarea)
+            pnts.loc[pnts.id=='','id'] ='NOAREA'
             pnts.to_csv(targets[0])
             
         config = {"config": get_var('config', 'NO')}
@@ -222,8 +226,8 @@ def task_make_surveys():
             for name,data in drone.groupby('Survey'):
                 data['Counter'] = 1
                 data['Counter'] = data['Counter'].cumsum()
-                data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id_fill}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
-                filename = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id_fill.max()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv')                
+                data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
+                filename = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv')                
                 data.to_csv(filename,index=True)
             
         config = {"config": get_var('config', 'NO')}
@@ -233,7 +237,7 @@ def task_make_surveys():
         file_dep = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveyswitharea.csv')
         if os.path.exists(file_dep):
             surveys =pd.read_csv(file_dep,index_col='TimeStamp',parse_dates=['TimeStamp']).groupby('Survey')
-            targets = [os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id_fill.max()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv') for name,data in surveys]
+            targets = [os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv') for name,data in surveys]
             return {
                 'actions':[(process_surveys,[],{'cfg':cfg})],
                 'file_dep':[file_dep],
