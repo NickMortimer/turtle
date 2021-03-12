@@ -4,6 +4,7 @@ import doit
 import glob
 import os
 import numpy as np
+from pandas.core.arrays.integer import Int64Dtype
 import yaml
 import pandas as pd
 from doit import get_var
@@ -12,8 +13,6 @@ from doit import create_after
 import numpy as np
 import plotly
 import plotly.express as px
-from getbase import getbasenames
-from getbase import getbase
 import geopandas as gp
 from geopandas.tools import sjoin
 from read_rtk import read_mrk
@@ -57,9 +56,9 @@ def task_create_json():
     
 @create_after(executed='create_json', target_regex='.*\exif.json')    
 def task_process_json():
-        def process_json(dependencies, targets,rtk=False):
+        def process_json(dependencies, targets):
             # dependencies.sort()
-            source_file = list(dependencies)[0]
+            source_file = list(filter(lambda x: '.json' in x, dependencies))[0]
             print('source file is: {0}'.format(source_file))
             print('output dir is: {0}'.format(list(targets)[0]))
             drone = pd.read_json(source_file)
@@ -73,12 +72,13 @@ def task_process_json():
             drone.loc[drone['GPSLatitudeRef']=='South','Latitude'] =drone.loc[drone['GPSLatitudeRef']=='South','Latitude']*-1
             drone = drone[drone.columns[drone.columns.isin(wanted)]]
             drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
-            # if rtk:
-            #     mrk =read_mrk(dependencies[0])
-            #     drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d\d\d\d)\.JPG').astype(int)
-            #     drone.set_index('Sequence',inplace=True)
-            #     drone =drone.join(mrk,rsuffix='Mrk')
-            # drone.set_index('TimeStamp',inplace=True)
+            drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d\d\d\d)\.JPG').astype(int)
+            rtk =list(filter(lambda x: '.MRK' in x, dependencies))
+            if rtk:
+                mrk =read_mrk(rtk[0])
+                drone.set_index('Sequence',inplace=True)
+                drone =drone.join(mrk,rsuffix='Mrk')
+            drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
             drone = drone[pd.notna(drone.index)]
             drone.to_csv(list(targets)[0],index=True)
@@ -91,13 +91,13 @@ def task_process_json():
             source = os.path.join(basepath,os.path.dirname(item))
             file_dep  = [os.path.join(source,'exif.json')]
             mark = glob.glob(os.path.join(source,'*Timestamp.MRK'))
-            # if mark:
-            #     file_dep.append(mark[0])
-            #     #file_dep = tuple(file_dep)
+            if mark:
+                file_dep.append(mark[0])
+                file_dep = tuple(file_dep)
             target =   os.path.join(source,'exif.csv')           
             yield {
                 'name':source,
-                'actions':[(process_json,[],{'rtk':bool(mark)})],
+                'actions':[process_json],
                 'file_dep':file_dep,
                 'targets':[target],
                 'clean':True,
@@ -192,6 +192,7 @@ def task_assign_area():
             dependencies.sort()
             drone =pd.read_csv(dependencies[1],index_col='TimeStamp',parse_dates=['TimeStamp'])
             pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
+            pnts.Survey = pnts.Survey.astype('int')
             areas =pd.read_csv(dependencies[0])
             shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
             pnts = sjoin(pnts, shapes, how='left')
