@@ -189,15 +189,17 @@ def task_assign_area():
             return area
         
         def process_assign_area(dependencies, targets):
-            dependencies.sort()
-            drone =pd.read_csv(dependencies[1],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            surveyfile = list(filter(lambda x: 'surveys.csv' in x, dependencies))[0]
+            areafile = list(filter(lambda x: 'surveyareas.csv' in x, dependencies))[0]
+            drone =pd.read_csv(surveyfile,index_col='TimeStamp',parse_dates=['TimeStamp'])
             pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
             pnts.Survey = pnts.Survey.astype('int')
-            areas =pd.read_csv(dependencies[0])
+            areas =pd.read_csv(areafile)
             shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
             pnts = sjoin(pnts, shapes, how='left')
+            pnts.loc[pnts.id.isna(),'id']=''
             pnts =pnts.join(pnts.groupby('Survey')['id'].max(),on='Survey',rsuffix='_fill')
-            pnts['id'] =pnts['id_fill'].fillna('NOAREA')
+            pnts.loc[pnts.id=='','id'] ='NOAREA'
             pnts.to_csv(targets[0])
             
         config = {"config": get_var('config', 'NO')}
