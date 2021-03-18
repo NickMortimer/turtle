@@ -60,7 +60,7 @@ def task_calc_basefiles():
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
         file_dep =glob.glob(os.path.join(basepath,cfg['paths']['marksource']),recursive=True)
-        target = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/basefiles.csv')
+        target = os.path.join(basepath,cfg['paths']['process'],'basefiles.csv')
         return {
             'actions':[(calc_basefiles, [],{'cfg':cfg,'basepath':basepath})],
             'file_dep':file_dep,
@@ -81,7 +81,7 @@ def task_get_basefiles():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/basefiles.csv')
+        file_dep = os.path.join(basepath,cfg['paths']['process'],'basefiles.csv')
         return {
             'actions':[(calc_basefiles, [],{'basepath':basepath})],
             'file_dep':[file_dep],
@@ -184,28 +184,27 @@ def task_rtk():
                 'clean':True,
             }          
 
-def task_calcpos():
-        def process_rtk(dependencies, targets):
-            gnss_file = targets[0]
-            mrk =read_mrk_gpst(dependencies[0]).set_index('UTCtime')
-            getbasenames(mrk.index,cfg['survey']['basestation'],os.path.dirname(gnss_file)).to_csv(gnss_file,index=True)
+def task_calc_pic_pos():
+        def process_pic_pos(dependencies, targets):
+            markdata =read_mrk_gpst(list(filter(lambda x: '.MRK' in x, dependencies))[0])
+            posdata = read_pos(list(filter(lambda x: '.pos' in x, dependencies))[0] )
+            combined =pd.concat([markdata[['Sequence']],posdata]).sort_index()
+            combined.loc[:,combined.columns !='Sequence']  = combined.loc[:,combined.columns !='Sequence'].interpolate(method='index')
+            combined[~combined.Sequence.isna()].to_csv(targets[0],index=True)
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
         pos_files =glob.glob(os.path.join(basepath,cfg['paths']['possource']),recursive=True)
-        read_pos(pos_files[0])
         mark_files =glob.glob(os.path.join(basepath,cfg['paths']['marksource']),recursive=True)
         exepath = f'{os.path.join(basepath,cfg["paths"]["rtklib"],"rnx2rtkp.exe")}'
         rtkconfig = os.path.join(basepath,cfg['paths']['rtkconfig'])
-        for file in file_dep:
-            base = os.path.join(os.path.dirname(file),'*_15M_01S_MO.rnx')
-            nav = os.path.join(os.path.dirname(file),'*_01D_30S_MN.rnx')
+        for mark,pos in zip(mark_files,pos_files):
             yield {
-                'name':file,
-                'actions':[f'{exepath} -k {rtkconfig} -o {file.replace("obs","pos")} {file} {base} {nav} '],
-                'file_dep':[file],
-                'targets':[file[:-1]+'pos'],
+                'name':mark,
+                'actions':[process_pic_pos],
+                'file_dep':[mark,pos],
+                'targets':[mark.replace('MRK','CSV')],
                 'clean':True,
             } 
         

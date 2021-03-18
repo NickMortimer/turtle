@@ -58,6 +58,7 @@ import pandas as pd
 import os
 import glob
 import ftplib
+import re
 
 """
     Get 30 second data
@@ -91,11 +92,18 @@ def read_mrk_gpst(filename,index='UTCTime'):
 def read_pos(filename):
     # Using readlines()
     with open(filename, 'r') as pos:
+        head = 0
         while pos:
             line = pos.readline()
+            head= head+1
             if line.startswith(r'%  GPST'):
-                data = pd.read_csv(pos)
-                return data
+                break
+    names = re.split('\s+',line.strip())
+    data = pd.read_csv(filename,skiprows=head,sep='\s+',names=names,header=None)
+    data.index =pd.to_datetime(data['%']+' '+data['GPST'])
+    data.drop(['%','GPST'],axis=1,inplace=True)
+    data.index.name = 'GPST'
+    return data
 
         
 def imagenames(filename):

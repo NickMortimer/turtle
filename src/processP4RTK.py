@@ -16,6 +16,7 @@ import plotly.express as px
 import geopandas as gp
 from geopandas.tools import sjoin
 from read_rtk import read_mrk
+from pyproj import Proj 
 
 
 
@@ -44,21 +45,22 @@ def task_create_json():
         exifpath = os.path.join(basepath,cfg['paths']['exiftool'])
         for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource']),recursive=True):
             source = os.path.join(basepath,os.path.dirname(item))
-            target  = os.path.join(source,'exif.json')
-            filter = os.path.join(source,cfg['paths']['imagewild'])
-            yield {
-                'name':item,
-                'actions':[f'"{exifpath}" -json "{filter}" > "{target}"'],
-                'targets':[target],
-                'uptodate': [True],
-                'clean':True,
-            }
+            if glob.glob(os.path.join(source,'*.JPG')) or glob.glob(os.path.join(source,'*.jpg')):
+                target  = os.path.join(source,'exif.json')
+                filter = os.path.join(source,cfg['paths']['imagewild'])
+                file_dep = glob.glob(filter)
+                yield {
+                    'name':item,
+                    'file_dep':file_dep,
+                    'actions':[f'"{exifpath}" -json "{filter}" > "{target}"'],
+                    'targets':[target],
+                    'clean':True,
+                }
     
 @create_after(executed='create_json', target_regex='.*\exif.json')    
 def task_process_json():
         def process_json(dependencies, targets):
-            # dependencies.sort()
-            source_file = list(filter(lambda x: '.json' in x, dependencies))[0]
+            source_file =dependencies[0]
             print('source file is: {0}'.format(source_file))
             print('output dir is: {0}'.format(list(targets)[0]))
             drone = pd.read_json(source_file)
@@ -72,12 +74,42 @@ def task_process_json():
             drone.loc[drone['GPSLatitudeRef']=='South','Latitude'] =drone.loc[drone['GPSLatitudeRef']=='South','Latitude']*-1
             drone = drone[drone.columns[drone.columns.isin(wanted)]]
             drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
-            drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d\d\d\d)\.JPG').astype(int)
-            rtk =list(filter(lambda x: '.MRK' in x, dependencies))
-            if rtk:
-                mrk =read_mrk(rtk[0])
-                drone.set_index('Sequence',inplace=True)
+            drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d+)\.(jpg|JPG)')['Sequence']
+            drone.set_index('Sequence',inplace=True)
+            drone.to_csv(list(targets)[0],index=True)
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        for item in glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'exif.json'),recursive=True):
+            source = os.path.join(basepath,os.path.dirname(item))
+            file_dep  =  item
+            target =   os.path.join(source,'exif.csv')           
+            yield {
+                'name':source,
+                'actions':[process_json],
+                'file_dep':[file_dep],
+                'targets':[target],
+                'clean':True,
+            }
+
+    
+
+@create_after(executed='process_json', target_regex='.*\exif.json')    
+def task_process_mergpos():
+        def process_json(dependencies, targets):
+            # dependencies.sort()
+            source_file = list(filter(lambda x: 'exif.csv' in x, dependencies))[0]
+            drone =pd.read_csv(source_file,index_col='Sequence',parse_dates=['TimeStamp'])
+            mrk_file =list(filter(lambda x: '_Timestamp.MRK' in x, dependencies))
+            if mrk_file:
+                mrk =read_mrk(mrk_file[0])
                 drone =drone.join(mrk,rsuffix='Mrk')
+            rtk_file=list(filter(lambda x: '_Timestamp.CSV' in x, dependencies))
+            if rtk_file:
+                rtk =pd.read_csv(rtk_file[0],parse_dates=['GPST'],index_col=['Sequence'])
+                drone =drone.join(rtk,rsuffix='rtk')
             drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
             drone = drone[pd.notna(drone.index)]
@@ -89,20 +121,20 @@ def task_process_json():
         basepath = os.path.dirname(config['config'])
         for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource']),recursive=True):
             source = os.path.join(basepath,os.path.dirname(item))
-            file_dep  = [os.path.join(source,'exif.json')]
-            mark = glob.glob(os.path.join(source,'*Timestamp.MRK'))
-            if mark:
-                file_dep.append(mark[0])
-                file_dep = tuple(file_dep)
-            target =   os.path.join(source,'exif.csv')           
-            yield {
-                'name':source,
-                'actions':[process_json],
-                'file_dep':file_dep,
-                'targets':[target],
-                'clean':True,
-            }
-
+            file_dep  =  list(filter(lambda x:  any(f in x for f in ['exif.csv','Timestamp']), glob.glob(os.path.join(source,'*.*'))))
+            if file_dep:
+                target =   os.path.join(source,'merge.csv')           
+                yield {
+                    'name':source,
+                    'actions':[process_json],
+                    'file_dep':file_dep,
+                    'targets':[target],
+                    'clean':True,
+                }    
+    
+    
+    
+@create_after(executed='process_json', target_regex='.*\exif.csv') 
 def task_merge_xif():
         def process_xif(dependencies, targets):
             target = list(targets)[0]
@@ -116,9 +148,11 @@ def task_merge_xif():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'exif.csv')
+        searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'merge.csv')
         file_dep = glob.glob(searchpath,recursive=True)
-        target = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/exif.csv')
+        processpath =os.path.join(basepath,cfg['paths']['process'])
+        os.makedirs(processpath,exist_ok=True)
+        target = os.path.join(processpath,'mergeall.csv')
         return {
             'actions':[process_xif],
             'file_dep':file_dep,
@@ -137,6 +171,7 @@ def task_split_surveys():
             drone.to_csv(targets[1],index=True)
             drone['StartTime'] =drone.index
             drone['EndTime'] =drone.index
+            drone = drone[~drone.index.isna()]
             starttime = drone.groupby('Survey').min()['StartTime']
             endtime = drone.groupby('Survey').max()['EndTime']
             count =   drone.groupby('Survey').count()['SourceFile'].rename('ImageCount')
@@ -149,8 +184,8 @@ def task_split_surveys():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/exif.csv')
-        targets = (os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveysummary.csv'),os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveys.csv'))
+        file_dep = os.path.join(basepath,cfg['paths']['process'],'mergeall.csv')
+        targets = (os.path.join(basepath,cfg['paths']['process'],'surveysummary.csv'),os.path.join(basepath,cfg['paths']['process'],'surveys.csv'))
         return {
             'actions':[(process_survey, [],{'timedelta':cfg['survey']['timedelta']})],
             'file_dep':[file_dep],
@@ -158,7 +193,28 @@ def task_split_surveys():
             'clean':True,
         }  
         
-          
+def task_plot_surveys():
+        def process_survey(dependencies, targets,apikey):
+            drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            px.set_mapbox_access_token(apikey)
+            fig = px.scatter_mapbox(drone, hover_name='Survey', lat="Latitude", lon="Longitude",  
+                                    mapbox_style="satellite-streets",color="Survey", size_max=30, zoom=10)
+            fig.update_layout(mapbox_style="satellite-streets")
+            plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = os.path.join(basepath,cfg['paths']['process'],'surveys.csv')
+        targets = os.path.join(basepath,cfg['paths']['process'],'surveys.html')
+        return {
+
+            'actions':[(process_survey, [],{'apikey':cfg['mapboxkey']})],
+            'file_dep':[file_dep],
+            'targets':[targets],
+            'clean':True,
+        }            
 
 def task_make_area_list():
         def split(path):
@@ -174,7 +230,7 @@ def task_make_area_list():
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
         file_dep = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['surveyarea']),'**/*.shp'),recursive=True)
-        target = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveyareas.csv')
+        target = os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv')
         return {
             'actions':[process_area_list],
             'file_dep':file_dep,
@@ -210,16 +266,16 @@ def task_assign_area():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = [os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveys.csv'),
-                    os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveyareas.csv')]
-        target = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveyswitharea.csv')
+        file_dep = [os.path.join(basepath,cfg['paths']['process'],'surveys.csv'),
+                    os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv')]
+        target = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
         return {
             'actions':[process_assign_area],
             'file_dep':file_dep,
             'targets':[target],
             'clean':True,
         }       
-        
+@create_after(executed='assign_area', target_regex='.*\exif.csv')         
 def task_make_surveys():
         def process_surveys(dependencies, targets,cfg):
             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
@@ -227,23 +283,43 @@ def task_make_surveys():
                 data['Counter'] = 1
                 data['Counter'] = data['Counter'].cumsum()
                 data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
-                filename = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv')                
+                filename = os.path.join(basepath,cfg['paths']['process'],f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
                 data.to_csv(filename,index=True)
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveyswitharea.csv')
+        file_dep = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
         if os.path.exists(file_dep):
             surveys =pd.read_csv(file_dep,index_col='TimeStamp',parse_dates=['TimeStamp']).groupby('Survey')
-            targets = [os.path.join(basepath,os.path.dirname(cfg['paths']['output']),f'merge/Survey_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M%S")}.csv') for name,data in surveys]
+            targets = [os.path.join(basepath,cfg['paths']['process'],f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv') for name,data in surveys]
             return {
                 'actions':[(process_surveys,[],{'cfg':cfg})],
                 'file_dep':[file_dep],
                 'targets':targets,
                 'clean':True,
-            }         
+            }   
+            
+def task_file_images():
+        def process_images(dependencies, targets):
+            survey = pd.read_csv(dependencies[0])
+            pass
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'))
+        for file in file_dep:
+            
+            yield {
+                'name':file,
+                'actions':[process_images],
+                'file_dep':[file],
+                'uptodate': [True],
+                'clean':True,
+            }      
         
         
 
@@ -251,27 +327,7 @@ def task_make_surveys():
 #     pass
 #xifdata.apply(lambda item: f"{survey['dronetype']}_{survey['camera']}_{survey['country']}_{survey['surveycode']}_{survey['surveynumber']:03}_{item.LocalTime}_{item.Counter:04}.JPG", axis=1)       
  
-def task_plot_surveys():
-        def process_survey(dependencies, targets,apikey):
-            drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-            px.set_mapbox_access_token(apikey)
-            fig = px.scatter_mapbox(drone, hover_name='Survey', lat="Latitude", lon="Longitude",  
-                                    mapbox_style="satellite-streets",color="Survey", size_max=30, zoom=10)
-            fig.update_layout(mapbox_style="satellite-streets")
-            plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
-            
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveys.csv')
-        targets = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveys.html')
-        return {
-            'actions':[(process_survey, [],{'apikey':cfg['mapboxkey']})],
-            'file_dep':[file_dep],
-            'targets':[targets],
-            'clean':True,
-        }           
+         
 if __name__ == '__main__':
     import doit
 
