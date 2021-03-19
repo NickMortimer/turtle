@@ -17,6 +17,8 @@ import geopandas as gp
 from geopandas.tools import sjoin
 from read_rtk import read_mrk
 from pyproj import Proj 
+from doit.tools import check_timestamp_unchanged
+import shutil
 
 
 
@@ -49,13 +51,15 @@ def task_create_json():
                 target  = os.path.join(source,'exif.json')
                 filter = os.path.join(source,cfg['paths']['imagewild'])
                 file_dep = glob.glob(filter)
-                yield {
-                    'name':item,
-                    'file_dep':file_dep,
-                    'actions':[f'"{exifpath}" -json "{filter}" > "{target}"'],
-                    'targets':[target],
-                    'clean':True,
-                }
+                if file_dep:
+                    yield {
+                        'name':item,
+                        'actions':[f'"{exifpath}" -json "{filter}" > "{target}"'],
+                        'targets':[target],
+                        'uptodate':[True],
+#                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
+                        'clean':True,
+                    }
     
 @create_after(executed='create_json', target_regex='.*\exif.json')    
 def task_process_json():
@@ -91,6 +95,7 @@ def task_process_json():
                 'actions':[process_json],
                 'file_dep':[file_dep],
                 'targets':[target],
+
                 'clean':True,
             }
 
@@ -283,7 +288,7 @@ def task_make_surveys():
                 data['Counter'] = 1
                 data['Counter'] = data['Counter'].cumsum()
                 data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
-                filename = os.path.join(basepath,cfg['paths']['process'],f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
+                filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
                 data.to_csv(filename,index=True)
             
         config = {"config": get_var('config', 'NO')}
@@ -293,7 +298,8 @@ def task_make_surveys():
         file_dep = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
         if os.path.exists(file_dep):
             surveys =pd.read_csv(file_dep,index_col='TimeStamp',parse_dates=['TimeStamp']).groupby('Survey')
-            targets = [os.path.join(basepath,cfg['paths']['process'],f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv') for name,data in surveys]
+            targets = [os.path.join(basepath,cfg['paths']['process'],
+                                    f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv') for name,data in surveys]
             return {
                 'actions':[(process_surveys,[],{'cfg':cfg})],
                 'file_dep':[file_dep],
@@ -304,7 +310,14 @@ def task_make_surveys():
 def task_file_images():
         def process_images(dependencies, targets):
             survey = pd.read_csv(dependencies[0])
-            pass
+            destpath = os.path.dirname(targets[0])
+            os.makedirs(destpath,exist_ok=True)
+
+            for index,row in survey.iterrows():
+                dest =os.path.join(destpath,row.NewName)
+                if not os.path.exists(dest):
+                    shutil.copyfile(row.SourceFile,dest)
+            shutil.copyfile(dependencies[0],targets[0])
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
@@ -312,11 +325,14 @@ def task_file_images():
         basepath = os.path.dirname(config['config'])
         file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'))
         for file in file_dep:
-            
+            country = os.path.basename(file).split('_')[0]
+            sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
+            target = os.path.join(cfg['paths']['output'],country,sitecode,os.path.basename(file))
             yield {
                 'name':file,
                 'actions':[process_images],
                 'file_dep':[file],
+                'targets':[target],
                 'uptodate': [True],
                 'clean':True,
             }      
