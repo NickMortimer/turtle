@@ -1,3 +1,4 @@
+from genericpath import exists
 import os
 import glob
 import doit
@@ -287,6 +288,7 @@ def task_make_surveys():
             for name,data in drone.groupby('Survey'):
                 data['Counter'] = 1
                 data['Counter'] = data['Counter'].cumsum()
+                data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
                 data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
                 filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
                 data.to_csv(filename,index=True)
@@ -337,8 +339,57 @@ def task_file_images():
                 'clean':True,
             }      
         
-        
+def task_check_survey():
+        def process_check_survey(dependencies, targets):
+            drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            images = pd.DataFrame(glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*.JPG')),
+                                  columns=['Path'])
+            images['NewName'] = images['Path'].apply(os.path.basename)
+            d =drone.join(images.set_index('NewName'),how='left',on=['NewName'],rsuffix="f")
+            missing =d.Path.isna().sum()
+            expected = d.NewName.count()
+            coverage = 100*(expected-missing)/expected
+            pd.DataFrame([{'SurveyId':d.SurveyId.max(),
+                           'StartTime':d.index.min(),'EndTime':d.index.max(),
+                           'Latitude':d.Latitude.mean(),'Longitude':d.Longitude.mean(),
+                           'Coverage':coverage,'Expected':expected,
+                           'Missing':missing}]).to_csv(targets[0],index=False)
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey.csv'),recursive=True)
+        for file in file_dep:
+            target = file.replace('_survey','_survey_summary')
+            yield {
+                'name':file,
+                'actions':[process_check_survey],
+                'file_dep':[file],
+                'targets':[target],
+                'uptodate': [True],
+                'clean':True,
+            }         
 
+def task_concat_check_survey():
+        def process_concat_check_survey(dependencies, targets):
+            os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
+            surveys =pd.concat([pd.read_csv(file) for file in dependencies])
+            surveys =surveys.set_index('SurveyId').sort_index()
+            surveys.to_csv(targets[0])
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey_summary.csv'),recursive=True)
+        target = os.path.join(cfg['paths']['reports'],'image_coverage.csv')
+        return {
+            'actions':[process_concat_check_survey],
+            'file_dep':file_dep,
+            'targets':[target],
+            'clean':True,
+            }         
 # def task_calculate_newname():
 #     pass
 #xifdata.apply(lambda item: f"{survey['dronetype']}_{survey['camera']}_{survey['country']}_{survey['surveycode']}_{survey['surveynumber']:03}_{item.LocalTime}_{item.Counter:04}.JPG", axis=1)       

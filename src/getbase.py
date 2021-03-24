@@ -106,11 +106,10 @@ def task_unzip_base():
         for file in file_dep:
             yield {
                 'name':file,
-                'actions':[f'"{zip}" e "{file}" -o"{gnsspath}"'],
+                'actions':[f'"{zip}" e -aos "{file}" -o"{gnsspath}"'],
                 'file_dep':[file],
                 'targets' : [file[:-3]],
-                'uptodate':[True],
-                'clean':True,
+                'uptodate':[run_once],
             } 
 
 
@@ -129,20 +128,21 @@ def task_crx2rinx_base():
         file_dep = glob.glob(os.path.join(basepath,cfg['paths']['gnssceche'],'*.crx'))
         targets=list(map (lambda x:x.replace('.crx','.rnx'),file_dep))
         for file,target in zip(file_dep,targets):
-            yield {
-                'name':file,
-                'actions':[f'"{crx2nxpath}" "{file}"'],
-                'file_dep':[file],
-                'targets':[target],
-                'clean':True,
-            }          
+            if not os.path.exists(target):
+                yield {
+                    'name':file,
+                    'actions':[f'"{crx2nxpath}" -f "{file}"'],
+                    'targets':[target],
+                    'uptodate':[run_once],
+                    'clean':True,
+                }          
         targets = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveys.html')
         
             
 def task_move_nav():
         def move_nav(dependencies, targets):
             gnss_file = targets[0]
-            mrk =read_mrk(dependencies[0]).set_index('UTCtime')
+            mrk =read_mrk_gpst(dependencies[0])
             getbasenames(mrk.index,cfg['survey']['basestation'],os.path.dirname(gnss_file)).to_csv(gnss_file,index=True)
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
@@ -175,21 +175,23 @@ def task_rtk():
         for file in file_dep:
             base = os.path.join(os.path.dirname(file),'*_15M_01S_MO.rnx')
             nav = os.path.join(os.path.dirname(file),'*_01D_30S_MN.rnx')
-            yield {
-                'name':file,
-                'actions':[f'{exepath} -k {rtkconfig} -o {file.replace("obs","pos")} {file} {base} {nav} '],
-                'file_dep':[file],
-                'targets':[file.replace("obs","pos")],
-                'uptodate':[True],
-                'clean':True,
-            }          
+            if not os.path.exists(file.replace("obs","pos")):
+                yield {
+                    'name':file,
+                    'actions':[f'{exepath} -k {rtkconfig} -o {file.replace("obs","pos")} {file} {base} {nav} '],
+                    'file_dep':[file],
+                    'targets':[file.replace("obs","pos")],
+                    'uptodate':[True],
+                    'clean':True,
+                }          
 
 def task_calc_pic_pos():
         def process_pic_pos(dependencies, targets):
             markdata =read_mrk_gpst(list(filter(lambda x: '.MRK' in x, dependencies))[0])
             posdata = read_pos(list(filter(lambda x: '.pos' in x, dependencies))[0] )
-            combined =pd.concat([markdata[['Sequence']],posdata]).sort_index()
+            combined =pd.concat([markdata[['Sequence']],posdata]).sort_index()   
             combined.loc[:,combined.columns !='Sequence']  = combined.loc[:,combined.columns !='Sequence'].interpolate(method='index')
+            combined.index.name = 'GPST'
             combined[~combined.Sequence.isna()].to_csv(targets[0],index=True)
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
