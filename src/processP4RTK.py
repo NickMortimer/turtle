@@ -121,6 +121,7 @@ def task_process_mergpos():
             leg['GpsSpeed']=(((leg['Northing'].diff()**2 + leg['Easting'].diff()**2)**0.5)/leg.GPSTime.diff().dt.total_seconds())
             leg['timedelta'] = leg.GPSTime.diff().dt.total_seconds()
             leg['GPSExcessTime'] = ((leg['GpsSpeed']/leg['DroneSpeed']) * leg['timedelta'])-leg['timedelta']
+            leg['GPSExcessTime']=leg['GPSExcessTime'].replace([np.nan,np.inf],0)
             leg['ImageTime'] = leg.TimeStamp
             leg['ImageInterval']=leg['ImageTime'].diff().dt.total_seconds()
             leg.loc[leg['ImageInterval']==2,'ImageTime'] =leg.loc[leg['ImageInterval']==2,'ImageTime'] + pd.to_timedelta('500L')
@@ -130,7 +131,7 @@ def task_process_mergpos():
                 leg['timedelta'] = leg.GPSTime.diff().dt.total_seconds()
                 leg['GpsSpeed']=(((leg['Northing'].diff()**2 + leg['Easting'].diff()**2)**0.5)/leg.GPSTime.diff().dt.total_seconds())
                 leg['GPSExcessTime'] = ((leg['GpsSpeed']/leg['DroneSpeed']) * leg['timedelta'])-leg['timedelta']
-                leg.replace([np.inf, -np.inf],0, inplace=True)
+                leg['GPSExcessTime']=leg['GPSExcessTime'].replace([np.nan,np.inf],0)
             gpstime=leg.GPSTime.astype('int64').astype("float")
             imagetime= leg.ImageTime.astype('int64').astype('float')
             leg['ImageNorthing'] =np.interp(imagetime,gpstime,leg.Northing)
