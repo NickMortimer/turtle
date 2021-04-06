@@ -118,7 +118,7 @@ class P4rtk:
     def getimagepolygon(self):
         xw =self.imagewidth/2
         yw=self.imageheight/2
-        points =[[-xw,yw],[-xw,-yw],[xw,-yw],[xw,-yw]]
+        points =[[-xw,yw],[-xw,-yw],[xw,-yw],[xw,yw]]
         polydata =[self.cameratorealworld(pos[0],pos[1]) for pos in points]
         return gp.GeoSeries(Polygon(polydata),crs=self.crs)
         
