@@ -7,9 +7,9 @@ from shapely.geometry import Polygon
 import geopandas as gp
 CCDSIZE =0.0132/5472
 class P4rtk:
-    def __init__(self,dewarpdata,crs,imagewidth=5472,imagehight=3648,pixelsize=CCDSIZE):
+    def __init__(self,dewarpdata,crs,imagewidth=5472,imageheight=3648,pixelsize=CCDSIZE):
         self.imagewidth =imagewidth
-        self.imagehight = imagehight
+        self.imageheight = imageheight
         self.pixelsize = pixelsize
         self.crs = crs
         self.dewarp(dewarpdata)
@@ -87,13 +87,13 @@ class P4rtk:
 
     def dewarp(self,dewarpdata):
         self.K = np.array([[dewarpdata[0],0,(self.imagewidth/2)+dewarpdata[2]],
-                [0,dewarpdata[1],(self.imagehight/2)+dewarpdata[3]],
+                [0,dewarpdata[1],(self.imageheight/2)+dewarpdata[3]],
                 [0,0,1]])
         self.Kp = np.array([[dewarpdata[0],0,(self.imagewidth/2)+dewarpdata[2],0],
-                        [0,dewarpdata[1],(self.imagehight/2)+dewarpdata[3],0],
+                        [0,dewarpdata[1],(self.imageheight/2)+dewarpdata[3],0],
                         [0,0,1,0]])
         self.Km = np.array([[dewarpdata[0]*self.pixelsize,0,(self.imagewidth/2+dewarpdata[2])*self.pixelsize,0],
-                        [0,dewarpdata[1]*self.pixelsize,(self.imagehight/2+dewarpdata[3])*self.pixelsize,0],
+                        [0,dewarpdata[1]*self.pixelsize,(self.imageheight/2+dewarpdata[3])*self.pixelsize,0],
                         [0,0,1,0]])
         self.Kminverse = np.linalg.inv(self.Km[0:3,0:3])
         self.distCoeffs = dewarpdata[4:]
@@ -116,8 +116,8 @@ class P4rtk:
         pass
     
     def getimagepolygon(self):
-        xw =self.imageWidth/2
-        yw=self.ImageHeight/2
+        xw =self.imagewidth/2
+        yw=self.imageheight/2
         points =[[-xw,yw],[-xw,-yw],[xw,-yw],[xw,-yw]]
         polydata =[self.cameratorealworld(pos[0],pos[1]) for pos in points]
         return gp.GeoSeries(Polygon(polydata),crs=self.crs)

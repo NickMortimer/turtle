@@ -200,9 +200,11 @@ def task_addpolygons():
                                   (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree)
             return drone.getimagepolygon()
         data = pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
-        gdf = gp.GeoDataFrame(data, geometry=gp.points_from_xy(data.Easting, data.Northing),crs=data['UtmCode'].first())
-        drone =P4rtk(dewarp,data['UtmCode'].first())
+        crs = f'epsg:{int(data["UtmCode"][0])}'
+        gdf = gp.GeoDataFrame(data, geometry=gp.points_from_xy(data.Easting, data.Northing),crs=crs)
+        drone =P4rtk(dewarp,crs)
         gdf['ImagePolygon'] = gdf.apply(getpoly,axis=1)
+        gdf.to_csv(targets[0])
         
         
         
@@ -235,7 +237,7 @@ def task_merge_xif():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'merge.csv')
+        searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'merge_polygons.csv')
         file_dep = glob.glob(searchpath,recursive=True)
         processpath =os.path.join(basepath,cfg['paths']['process'])
         os.makedirs(processpath,exist_ok=True)
