@@ -16,10 +16,13 @@ import plotly
 import plotly.express as px
 import geopandas as gp
 from geopandas.tools import sjoin
+from drone import P4rtk
 from read_rtk import read_mrk
 from pyproj import Proj 
 from doit.tools import check_timestamp_unchanged
 import shutil
+from shapely.geometry import Polygon
+
 
 
 
@@ -116,6 +119,7 @@ def task_process_mergpos():
         def process_transect(leg):
             leg = leg.copy()
             leg['GPSTime'] = leg.TimeStamp
+            leg = leg[~ leg.TimeStamp.isna()]
             leg.loc[leg['GPSTime'].duplicated(),'GPSTime']=leg.loc[leg['GPSTime'].duplicated(),'GPSTime']+pd.to_timedelta('500L')
             leg['GPSDistance'] =((leg['Northing'].diff()**2 + leg['Easting'].diff()**2)**0.5)
             leg['GpsSpeed']=(((leg['Northing'].diff()**2 + leg['Easting'].diff()**2)**0.5)/leg.GPSTime.diff().dt.total_seconds())
@@ -154,6 +158,7 @@ def task_process_mergpos():
             drone['Leg'] =0
             drone.loc[drone['Interval']>8,'Leg'] =1
             drone['Leg'] = drone['Leg'].cumsum()
+            drone['UtmCode'] =utmcode
             g = drone.groupby('Leg')
             drone =pd.concat([process_transect(leg) for name,leg in g])
             mrk_file =list(filter(lambda x: '_Timestamp.MRK' in x, dependencies))
@@ -164,7 +169,7 @@ def task_process_mergpos():
             rtk_file=list(filter(lambda x: '_Timestamp.CSV' in x, dependencies))
             if rtk_file:
                 rtk =pd.read_csv(rtk_file[0],parse_dates=['GPST'],index_col=['Sequence'])
-                rtk['Easting'],rtk['Northing'] =utmproj(rtk['Longitude'].values,rtk['Latitude'].values)
+                rtk['Easting'],rtk['Northing'] =utmproj(rtk['longitude(deg)'].values,rtk['latitude(deg)'].values)
                 drone =drone.join(rtk,rsuffix='rtk')
             drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
@@ -188,7 +193,33 @@ def task_process_mergpos():
                     'clean':True,
                 }    
     
-    
+def task_addpolygons():
+    def process_polygons(dependencies, targets,dewarp):
+        def getpoly(item):
+            drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
+                                  (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree)
+            return drone.getimagepolygon()
+        data = pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
+        gdf = gp.GeoDataFrame(data, geometry=gp.points_from_xy(data.Easting, data.Northing),crs=data['UtmCode'].first())
+        drone =P4rtk(dewarp,data['UtmCode'].first())
+        gdf['ImagePolygon'] = gdf.apply(getpoly,axis=1)
+        
+        
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    dewarp = pd.to_numeric(cfg['survey']['dewarp'] )
+    for file_dep in glob.glob(os.path.join(basepath,cfg['paths']['imagesource'],'merge.csv'),recursive=True):
+        target = os.path.join(basepath,os.path.dirname(file_dep),'merge_polygons.csv')   
+        yield {
+            'name':file_dep,
+            'actions':[(process_polygons, [],{'dewarp':dewarp})],
+            'file_dep':[file_dep],
+            'targets':[target],
+            'clean':True,
+        }       
     
 @create_after(executed='process_json', target_regex='.*\exif.csv') 
 def task_merge_xif():
@@ -388,7 +419,7 @@ def task_file_images():
                 'uptodate': [True],
                 'clean':True,
             }      
-        
+    
 def task_check_survey():
         def process_check_survey(dependencies, targets):
             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
