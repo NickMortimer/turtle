@@ -408,7 +408,7 @@ def task_survey_areas():
         survey = data['SurveyId'][0]
         gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
         gdf['ImagePolygon'] = data.ImagePolygon.apply(shapely.wkt.loads)
-        gdf['SureveyAreaHec'] = survey_area(gdf)/10000
+        gdf['SurveyAreaHec'] = survey_area(gdf)/10000
         gdf.to_csv(targets[0],index=True)
         
     config = {"config": get_var('config', 'NO')}
@@ -501,13 +501,14 @@ def task_check_survey():
                            'StartTime':d.index.min(),'EndTime':d.index.max(),
                            'Latitude':d.Latitude.mean(),'Longitude':d.Longitude.mean(),
                            'Coverage':coverage,'Expected':expected,
+                           'Area':d.SurveyAreaHec.mean(),
                            'Missing':missing}]).to_csv(targets[0],index=False)
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey.csv'),recursive=True)
+        file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey_area.csv'),recursive=True)
         for file in file_dep:
             target = file.replace('_survey','_survey_summary')
             yield {
@@ -520,7 +521,7 @@ def task_check_survey():
             }  
             
       
-
+@create_after(executed='check_survey', target_regex='*_survey_summary')  
 def task_concat_check_survey():
         def process_concat_check_survey(dependencies, targets):
             os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
