@@ -533,7 +533,7 @@ def task_concat_check_survey():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey_summary.csv'),recursive=True)
+        file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey_area_summary.csv'),recursive=True)
         target = os.path.join(cfg['paths']['reports'],'image_coverage.csv')
         return {
             'actions':[process_concat_check_survey],
