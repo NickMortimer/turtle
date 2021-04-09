@@ -23,7 +23,7 @@ from doit.tools import check_timestamp_unchanged
 import shutil
 from shapely.geometry import Polygon
 import shapely.wkt
-
+from shapely.geometry import MultiPoint
 
 
 
@@ -251,8 +251,9 @@ def task_merge_xif():
         }
 
 def task_split_surveys():
-        def process_survey(dependencies, targets,timedelta):
+        def process_survey(dependencies, targets,timedelta,maxpitch):
             drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            #drone = drone[drone.GimbalPitchDegree<maxpitch].copy()
             os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
             drone.sort_index(inplace=True)
             drone['Survey']=drone.index
@@ -277,7 +278,7 @@ def task_split_surveys():
         file_dep = os.path.join(basepath,cfg['paths']['process'],'mergeall.csv')
         targets = (os.path.join(basepath,cfg['paths']['process'],'surveysummary.csv'),os.path.join(basepath,cfg['paths']['process'],'surveys.csv'))
         return {
-            'actions':[(process_survey, [],{'timedelta':cfg['survey']['timedelta']})],
+            'actions':[(process_survey, [],{'timedelta':cfg['survey']['timedelta'],'maxpitch':cfg['survey']['maxpitch']})],
             'file_dep':[file_dep],
             'targets':targets,
             'clean':True,
@@ -393,6 +394,38 @@ def task_make_surveys():
                 'clean':True,
             }   
             
+def task_survey_areas():
+    def poly_to_points(polygon):
+        return np.dstack(polygon.exterior.coords.xy)
+    
+    def survey_area(grp):
+        p=MultiPoint(np.hstack(grp['ImagePolygon'].apply(poly_to_points))[0]).convex_hull
+        return p.area
+    
+    def calculate_area(dependencies, targets):
+        data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        crs = f'epsg:{int(data["UtmCode"][0])}'
+        survey = data['SurveyId'][0]
+        gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
+        gdf['ImagePolygon'] = data.ImagePolygon.apply(shapely.wkt.loads)
+        gdf['SureveyAreaHec'] = survey_area(gdf)/10000
+        gdf.to_csv(targets[0],index=True)
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'),recursive=True)
+    for file in file_dep:
+        target = file.replace('_survey','_survey_area')
+        yield {
+            'name':file,
+            'actions':[calculate_area],
+            'file_dep':[file],
+            'targets':[target],
+            'uptodate': [True],
+            'clean':True,
+        }            
 def task_file_images():
         def process_images(dependencies, targets):
             survey = pd.read_csv(dependencies[0])
@@ -409,7 +442,7 @@ def task_file_images():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'))
+        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
         for file in file_dep:
             country = os.path.basename(file).split('_')[0]
             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
@@ -422,6 +455,10 @@ def task_file_images():
                 'uptodate': [True],
                 'clean':True,
             }  
+            
+
+        
+        
 def task_geopgk_survey():
         def process_geo(dependencies, targets):
             data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])

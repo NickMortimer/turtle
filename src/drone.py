@@ -58,8 +58,8 @@ class P4rtk:
         pground =self.R[0:3,0:3].T.dot(self.Kminverse).dot(camcoord)
         #scale focal length to plain
         pground = (pground *tp[2]/pground[2]) -tp
-        pground[0] =pground[0] +self.easting        
-        pground[1] =  pground[1]+self.northing
+        pground[0] =self.easting - pground[0]        
+        pground[1] = self.northing +pground[1]
         return pground
         
     # get the sensor orientation in North-East-Down coordinates
@@ -115,10 +115,15 @@ class P4rtk:
     def realworld(self,x,y,):
         pass
     
-    def getimagepolygon(self):
-        xw =self.imagewidth/2
-        yw=self.imageheight/2
-        points =[[-xw,yw],[-xw,-yw],[xw,-yw],[xw,yw]]
+    def getimagepolygon(self,perside=10):
+        y = np.linspace(0,self.imageheight,perside)
+        x =np.linspace(0,self.imagewidth,perside)
+        bottom = np.dstack((x,np.ones(perside)*self.imageheight))[0]
+        right = np.dstack((np.ones(10)*self.imagewidth,y[::-1]))[0]
+        top = np.dstack((x[::-1],np.zeros(perside)))[0]
+        left = np.dstack((np.zeros(perside),y))[0]
+        points = np.vstack((bottom,right,top,left))
+        points=self.jpegtoreal(points)
         polydata =[self.cameratorealworld(pos[0],pos[1]) for pos in points]
         return gp.GeoSeries(Polygon(polydata),crs=self.crs)
         
@@ -129,7 +134,7 @@ class P4rtk:
     
 if __name__ == '__main__':
     data = np.array([3706.080000000000,3692.930000000000,-34.370000000000,-34.720000000000,-0.271104000000,0.116514000000,0.001092580000,0.000348025000,-0.040583200000])
-    drone = P4rtk(data)
+    drone = P4rtk(data,'epsg:32749')
     gcp =pd.read_csv("T:/drone/raw/process/labelmematchup_final_pointpos.csv")
     gcp = gcp[gcp.label.isin(['gcp'])]
     gcp.points = gcp.points.apply(ast.literal_eval)
@@ -139,7 +144,7 @@ if __name__ == '__main__':
     gcp[['DewarpX','DewarpY']] =corrected
     for index,row in gcp.iterrows():
         #drone.setdronepos(row.Eastingrtk,row.Northingrtk,row.RelativeAltitude,-5,0,row.GimbalYawDegree)
-        drone.setdronepos(row.Eastingrtk,row.Northingrtk,row.EllipsoideHight+14.772+1.5,(90+row.GimbalPitchDegree)*-1,0,row.GimbalYawDegree+10)
+        drone.setdronepos(row.Eastingrtk,row.Northingrtk,row.EllipsoideHight+14.772+1,(90+row.GimbalPitchDegree)*-1,0,-row.GimbalYawDegree)
         print(f'JPG:{drone.cameratorealworld(row.JpegX,row.JpegY)} warp:{drone.cameratorealworld(row.DewarpX,row.DewarpY)}')
         
     

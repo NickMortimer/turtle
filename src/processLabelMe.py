@@ -21,6 +21,12 @@ import json
 import ast
 from pyproj import Proj
 from drone import P4rtk
+from sklearn.cluster import AffinityPropagation
+from sklearn import metrics
+from sklearn.cluster import MeanShift
+import matplotlib.pyplot as plt
+import shapely.wkt
+
 
 # def task_process_list_json():
 #         def process_labelme(dependencies, targets):
@@ -155,9 +161,9 @@ def task_calculate_positions():
     def process_positions(dependencies, targets):
             def calcRealworld(item):
                 #-14.772 hieght at Exmouth
-                localdrone = P4rtk(data)
-                localdrone.setdronepos(item.Eastingrtk,item.Northingrtk,item.EllipsoideHight+14.772+1.5,
-                                  (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree+10) #item.GimbalPitchDegree-90,item.GimbalRollDegree,-item.GimbalYawDegree
+                localdrone = P4rtk(data,crs)
+                localdrone.setdronepos(item.Eastingrtk,item.Northingrtk,item.EllipsoideHight+14.772,
+                                  (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,-item.GimbalYawDegree+8) #item.GimbalPitchDegree-90,item.GimbalRollDegree,-item.GimbalYawDegree
                 pos=localdrone.cameratorealworld(item.DewarpX,item.DewarpY)
                 item.EastingPntD = pos[0]
                 item.NorthingPntD = pos[1]
@@ -172,7 +178,8 @@ def task_calculate_positions():
             drone= drone[drone.label.isin(['turtle_surface','turtle_jbs','gcp'])].copy()
             drone.points = drone.points.apply(ast.literal_eval)
             data = np.array([3706.080000000000,3692.930000000000,-34.370000000000,-34.720000000000,-0.271104000000,0.116514000000,0.001092580000,0.000348025000,-0.040583200000])
-            p4rtk = P4rtk(data)
+            crs = f'epsg:{int(drone["UtmCode"].min())}'
+            p4rtk = P4rtk(data,crs)
             #drone[['PointEasting','PontNorthing']]=drone.apply(process_row,axis=1,result_type='expand')
             jpegpoints = np.array(drone.points.apply(lambda x:x[0]).tolist())
             drone[['JpegX','JpegY']] =np.floor(jpegpoints)
@@ -195,6 +202,84 @@ def task_calculate_positions():
         'targets':[target],
         'clean':True,
     }   
+
+def task_process_turtles():
+
+    
+    def process_turtles(dependencies, targets):
+        def count_turtle(grp):
+            clustering = MeanShift(bandwidth=10).fit(np.dstack([grp.EastingPntD.values,grp.NorthingPntD.values])[0])
+            n_clusters_ = len(clustering.cluster_centers_)
+            fig,ax = plt.subplots(figsize=(8,8))
+            for index,row in grp.iterrows():
+                (x,y)=row.ImagePolygon.exterior.xy
+                ax.plot(x, y, color='#6699cc', alpha=0.7,
+                    linewidth=3, solid_capstyle='round', zorder=2)
+                ax.plot(row.EastingPntD,row.NorthingPntD,marker ='x',linestyle='')
+            ax.set_aspect(1)
+            plt.scatter(clustering.cluster_centers_[:, 0], clustering.cluster_centers_[:, 1], c='red', s=50);
+            plt.savefig(os.path.join(plotpath,f'group_plot_{grp.groups.min()}'))
+            plt.close()
+            return n_clusters_
+        plotpath =os.path.dirname(targets[0])
+        drone =pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
+        drone['ImagePolygon']=drone.ImagePolygon.apply(shapely.wkt.loads)
+        drone.sort_values('TimeStamp',inplace=True)
+        drone['groups']=0
+        drone.loc[abs(drone.TimeStamp.diff().dt.total_seconds())>12,'groups']=1
+        drone['groups']=drone['groups'].cumsum()
+        tcounts =pd.DataFrame(drone.groupby('groups').apply(count_turtle),columns=['turtle_count']).reset_index()     
+        output1 =pd.merge(drone,tcounts,on=['groups'])
+        output1.to_csv(target[0],index=True)
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep =os.path.join(basepath,cfg['paths']['process'],'labelmematchup_final_pointpos.csv')
+    target =os.path.join(basepath,cfg['paths']['process'],'labelmematchup_final_pointpos_turtles.csv')
+    return {
+        'actions':[process_turtles],
+        'file_dep':[file_dep],
+        'targets':[target],
+        'clean':True,
+    }    
+
+def task_process_turtles_totals():
+
+    
+    def process_turtles_totals(dependencies, targets):
+
+
+
+        drone =pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
+        
+        drone['ImagePolygon']=drone.ImagePolygon.apply(shapely.wkt.loads)
+        drone.sort_values('TimeStamp',inplace=True)
+        drone['groups']=0
+        drone.loc[abs(drone.TimeStamp.diff().dt.total_seconds())>12,'groups']=1
+        drone['groups']=drone['groups'].cumsum()
+        tcounts =pd.DataFrame(drone.groupby('groups').apply(count_turtle),columns=['turtle_count']).reset_index()     
+        output1 =pd.merge(drone,tcounts,on=['groups'])
+        output1.to_csv(targets[0],index=True)
+
+
+    area =pd.DataFrame(surveys.groupby('Survey').apply(survey_area)/10000,columns=['Area'])
+    area.to_csv('../total_area.csv')
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep =os.path.join(basepath,cfg['paths']['process'],'labelmematchup_final_pointpos_turtles.csv')
+    target =os.path.join(basepath,cfg['paths']['process'],'turtles_totals.csv')
+    return {
+        'actions':[process_turtles],
+        'file_dep':[file_dep],
+        'targets':[target],
+        'clean':True,
+    }    
+
 
 
 
