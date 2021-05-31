@@ -357,9 +357,9 @@ def task_make_grids():
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['surveyarea']),'**/*.shp'),recursive=True)
+    file_dep = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['surveyarea']),'**/*_AOI.shp'),recursive=True)
     for file in file_dep:
-        target = os.path.splitext(file)[0]+'_grid.shp'
+        target = file.replace('_AOI','_Grid')
         yield {
             'name':target,
             'actions':[process_grid],
@@ -370,7 +370,7 @@ def task_make_grids():
         
 def task_assign_area():
         def load_shape(row):
-            area = gp.read_file(row.file)
+            area = gp.read_file(row.File)
             area.id = row.SurveyCode
             return area
         
@@ -436,14 +436,18 @@ def task_make_surveys():
 
 def task_make_surveys_aoi():
         def process_surveys_aoi(dependencies, targets,cfg):
-            drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-            for name,data in drone.groupby('Survey'):
-                data['Counter'] = 1
-                data['Counter'] = data['Counter'].cumsum()
-                data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
-                data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
-                filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
-                data.to_csv(filename,index=True)
+            # 'maxpitch':cfg['survey']['maxpitch']}
+            surveyfile = list(filter(lambda x: 'survey_area' in x, dependencies))[0]
+            areafile = list(filter(lambda x: 'surveyareas.csv' in x, dependencies))[0]
+            drone =pd.read_csv(surveyfile,index_col='TimeStamp',parse_dates=['TimeStamp'])
+            
+            # for name,data in drone.groupby('Survey'):
+            #     data['Counter'] = 1
+            #     data['Counter'] = data['Counter'].cumsum()
+            #     data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
+            #     data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
+            #     filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
+            #     data.to_csv(filename,index=True)
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
@@ -456,7 +460,7 @@ def task_make_surveys_aoi():
             target = os.path.splitext(file)[0]+'_aoi.csv'
             yield {
                 'name':file,
-                'actions':[process_surveys_aoi],
+                'actions':[(process_surveys_aoi, [],{'cfg':cfg})],
                 'file_dep':[file,os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv')],
                 'targets':[target],
                 'uptodate': [True],
