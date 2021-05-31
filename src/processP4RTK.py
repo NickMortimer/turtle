@@ -359,7 +359,7 @@ def task_make_grids():
     basepath = os.path.dirname(config['config'])
     file_dep = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['surveyarea']),'**/*_AOI.shp'),recursive=True)
     for file in file_dep:
-        target = file.replace('_AOI','_Grid')
+        target = file.replace('_AOI.shp','_Grid.shp')
         yield {
             'name':target,
             'actions':[process_grid],
