@@ -310,7 +310,7 @@ def task_make_area_list():
         def split(path):
             print(path)
             keys =os.path.splitext(os.path.basename(path))[0].split('_')
-            return {'SurveyCode':keys[0],'SurveyLongName':keys[1],'type':keys[2],'file':path}
+            return {'SurveyCode':keys[0],'SurveyLongName':keys[1],'Type':keys[2],'File':path}
         
         def process_area_list(dependencies, targets):
             areas = pd.DataFrame.from_records([split(shape) for shape in dependencies])
@@ -385,6 +385,7 @@ def task_assign_area():
             pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
             pnts.Survey = pnts.Survey.astype('int')
             areas =pd.read_csv(areafile)
+            areas = areas[areas.Type=='SurveyArea']
             shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
             pnts = sjoin(pnts, shapes, how='left')
             pnts.loc[pnts.id.isna(),'id']=''
@@ -433,34 +434,34 @@ def task_make_surveys():
                 'clean':True,
             }   
 
-# def task_make_surveys_aoi():
-#         def process_surveys_aoi(dependencies, targets,cfg):
-#             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-#             for name,data in drone.groupby('Survey'):
-#                 data['Counter'] = 1
-#                 data['Counter'] = data['Counter'].cumsum()
-#                 data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
-#                 data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
-#                 filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
-#                 data.to_csv(filename,index=True)
+def task_make_surveys_aoi():
+        def process_surveys_aoi(dependencies, targets,cfg):
+            drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            for name,data in drone.groupby('Survey'):
+                data['Counter'] = 1
+                data['Counter'] = data['Counter'].cumsum()
+                data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
+                data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
+                filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
+                data.to_csv(filename,index=True)
             
-#         config = {"config": get_var('config', 'NO')}
-#         with open(config['config'], 'r') as ymlfile:
-#             cfg = yaml.load(ymlfile, yaml.SafeLoader)
-#         basepath = os.path.dirname(config['config'])
-#         file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
-#         for file in file_dep:
-#             country = os.path.basename(file).split('_')[0]
-#             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
-#             target = os.path.splitext(file)[0]+'_aoi.csv'
-#             yield {
-#                 'name':file,
-#                 'actions':[process_surveys_aoi],
-#                 'file_dep':[file],
-#                 'targets':[target],
-#                 'uptodate': [True],
-#                 'clean':True,
-#             }            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
+        for file in file_dep:
+            country = os.path.basename(file).split('_')[0]
+            sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
+            target = os.path.splitext(file)[0]+'_aoi.csv'
+            yield {
+                'name':file,
+                'actions':[process_surveys_aoi],
+                'file_dep':[file,os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv')],
+                'targets':[target],
+                'uptodate': [True],
+                'clean':True,
+            }            
             
 def task_survey_areas():
     def poly_to_points(polygon):
