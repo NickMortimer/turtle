@@ -26,6 +26,9 @@ from sklearn import metrics
 from sklearn.cluster import MeanShift
 import matplotlib.pyplot as plt
 import shapely.wkt
+import plotly
+import plotly.express as px
+from PIL import Image
 
 
 # def task_process_list_json():
@@ -47,22 +50,22 @@ import shapely.wkt
 #             'uptodate':[run_once],
             
 #         }
-
+def loadshapes(file):
+    lines =[]
+    with open(file, "r") as read_file:
+        while read_file:
+            line =read_file.readline()
+            if "imagePath" in line:
+                break
+            lines.append(line)
+    lines[-1] ='  ]}\n'
+    data = json.loads(''.join(lines).replace("\n", "").replace("'", '"').replace('u"', '"'))
+    data =pd.DataFrame(data['shapes'])
+    data['FilePath'] =file             
+    return(data)
 
 def task_process_labelme():
-        def loadshapes(file):
-            lines =[]
-            with open(file, "r") as read_file:
-                while read_file:
-                    line =read_file.readline()
-                    if "imagePath" in line:
-                        break
-                    lines.append(line)
-            lines[-1] ='  ]}\n'
-            data = json.loads(''.join(lines).replace("\n", "").replace("'", '"').replace('u"', '"'))
-            data =pd.DataFrame(data['shapes'])
-            data['FilePath'] =file             
-            return(data)
+ 
         def process_labelme(dependencies, targets):
             jsonfiles = glob.glob(os.path.join(os.path.dirname(targets[0]),'*.json'))
             if jsonfiles:
@@ -131,6 +134,150 @@ def task_process_matchup():
         'targets':[target],
         'clean':True,
     }   
+    
+    
+def task_make_yolo_training_images():
+    def process_yoloset(dependencies, targets):
+        os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
+        imagedir = os.path.join(os.path.dirname(targets[0]),'images')
+        os.makedirs(imagedir,exist_ok=True)
+        sourcefile = pd.read_csv(dependencies[0])
+        good =sourcefile[~sourcefile.label.isin(['done','don,e','gcp'])]
+        good.points = good.points.apply(ast.literal_eval)
+        classes = list(good.label.unique())
+        classes.sort()
+        images =good.groupby('FilePath')
+        for file,data in images:
+            Imgdest = os.path.join(imagedir,os.path.splitext(os.path.basename(file))[0]+'.JPG')
+            if not os.path.exists(Imgdest):
+                shutil.copy(os.path.splitext(file)[0]+'.JPG',
+                            os.path.join(imagedir,os.path.splitext(os.path.basename(file))[0]+'.JPG'))
+            jsondest = os.path.join(imagedir,os.path.splitext(os.path.basename(file))[0]+'.json')
+            if not os.path.exists(jsondest):
+                shapes =loadshapes(file)
+                shapes.drop(['FilePath','flags','group_id'],axis=1)[~shapes.label.isin(['done','don,e','gcp'])].to_json(jsondest)
+            txtdest = os.path.join(imagedir,os.path.splitext(os.path.basename(file))[0]+'.TXT')
+            if not os.path.exists(txtdest):
+                with open(txtdest,'w') as datafile:
+                    for index,row in data.iterrows():
+                        cla = classes.index(row.label)
+                        points = row.points
+                        if len(points)==2: #one animal
+                            datafile.write(f'{classes.index(row.label)} {points[0][0]/row.ImageWidth} {points[0][1]/row.ImageHeight} '\
+                                            f'{2*abs(points[0][0]-points[1][0])/row.ImageWidth}' \
+                                            f'{2*abs(points[0][1]-points[1][1])/row.ImageHeight}\n')
+                    
+                 
+                 
+        with open(targets[0],'w') as obnames:
+            obnames.writelines(map(lambda x:x+'\n', classes))
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = os.path.join(basepath,cfg['paths']['process'],'labelmematchup.csv')
+    target = os.path.join(basepath,cfg['paths']['output'],'yolo','data','obj.names')        
+    return {
+        'actions':[process_yoloset],
+        'file_dep':[file_dep],
+        'targets':[target],
+        'clean':True,
+    }   
+    
+    
+def task_crop_training_images():
+    def process_crop(dependencies, targets,size=256):
+        basepath = os.path.dirname(targets[0])
+        os.makedirs(basepath,exist_ok=True)
+        sourcefile = pd.read_csv(dependencies[0])
+        good =sourcefile[~sourcefile.label.isin(['done','don,e','gcp'])]
+        good.points = good.points.apply(ast.literal_eval)
+        classes = list(good.label.unique())
+        list(map(lambda x:os.makedirs(os.path.join(basepath,x),exist_ok=True), classes))
+        classes.sort()
+        images =good.groupby('FilePath')
+        for file,data in images:
+                imageObject = Image.open(os.path.splitext(file)[0]+'.JPG')
+                imagebase = os.path.splitext(os.path.basename(file))[0]
+                counter=0
+                for index,row in data.iterrows():
+                    cla = classes.index(row.label)
+                    points = row.points
+                    if len(points)==2: #one animal
+                        counter = counter+1
+                        output =os.path.join(basepath,row.label,f'{imagebase}_{counter:03d}.JPG')
+                        cropped = imageObject.crop((int(points[0][0] - size/2),
+                                                   int(points[0][1] - size/2),
+                                                   int(points[0][0] + size/2),
+                                                   int(points[0][1] + size/2)))
+
+                        cropped.save(output)                    
+        with open(targets[0],'w') as obnames:
+            obnames.writelines(map(lambda x:x+'\n', classes))
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = os.path.join(basepath,cfg['paths']['process'],'labelmematchup.csv')
+    target = os.path.join(basepath,cfg['paths']['output'],'train','obj.names')        
+    return {
+        'actions':[process_crop],
+        'file_dep':[file_dep],
+        'targets':[target],
+        'clean':True,
+    }     
+
+
+def task_make_training_images():
+    def process_yoloset(dependencies, targets):
+        os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
+        imagedir = os.path.join(os.path.dirname(targets[0]),'images')
+        os.makedirs(imagedir,exist_ok=True)
+        sourcefile = pd.read_csv(dependencies[0])
+        good =sourcefile[~sourcefile.label.isin(['done','don,e','gcp'])]
+        good.points = good.points.apply(ast.literal_eval)
+        classes = list(good.label.unique())
+        classes.sort()
+        images =good.groupby('FilePath')
+        for file,data in images:
+            Imgdest = os.path.join(imagedir,os.path.splitext(os.path.basename(file))[0]+'.JPG')
+            if not os.path.exists(Imgdest):
+                shutil.copy(os.path.splitext(file)[0]+'.JPG',
+                            os.path.join(imagedir,os.path.splitext(os.path.basename(file))[0]+'.JPG'))
+            jsondest = os.path.join(imagedir,os.path.splitext(os.path.basename(file))[0]+'.json')
+            if not os.path.exists(jsondest):
+                shapes =loadshapes(file)
+                shapes.drop(['FilePath','flags','group_id'],axis=1)[~shapes.label.isin(['done','don,e','gcp'])].to_json(jsondest)
+            txtdest = os.path.join(imagedir,os.path.splitext(os.path.basename(file))[0]+'.TXT')
+            if not os.path.exists(txtdest):
+                with open(txtdest,'w') as datafile:
+                    for index,row in data.iterrows():
+                        cla = classes.index(row.label)
+                        points = row.points
+                        if len(points)==2: #one animal
+                            datafile.write(f'{classes.index(row.label)} {points[0][0]/row.ImageWidth} {points[0][1]/row.ImageHeight} '\
+                                            f'{2*abs(points[0][0]-points[1][0])/row.ImageWidth}' \
+                                            f'{2*abs(points[0][1]-points[1][1])/row.ImageHeight}\n')
+                    
+                 
+                 
+        with open(targets[0],'w') as obnames:
+            obnames.writelines(map(lambda x:x+'\n', classes))
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = os.path.join(basepath,cfg['paths']['process'],'labelmematchup.csv')
+    target = os.path.join(basepath,cfg['paths']['output'],'yolo','obj.names')        
+    return {
+        'actions':[process_yoloset],
+        'file_dep':[file_dep],
+        'targets':[target],
+        'clean':True,
+    }      
     
 # def task_process_movefiles():
 #     def process_move(dependencies, targets,outputpath):
@@ -220,7 +367,7 @@ def task_process_turtles():
             plt.scatter(clustering.cluster_centers_[:, 0], clustering.cluster_centers_[:, 1], c='red', s=50);
             plt.savefig(os.path.join(plotpath,f'group_plot_{grp.groups.min()}'))
             plt.close()
-            return n_clusters_
+            return {'count':n_clusters_,'centers':clustering.cluster_centers_}
         plotpath =os.path.dirname(targets[0])
         drone =pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
         drone['ImagePolygon']=drone.ImagePolygon.apply(shapely.wkt.loads)
@@ -228,16 +375,21 @@ def task_process_turtles():
         drone['groups']=0
         drone.loc[abs(drone.TimeStamp.diff().dt.total_seconds())>12,'groups']=1
         drone['groups']=drone['groups'].cumsum()
-        tcounts =pd.DataFrame(drone.groupby('groups').apply(count_turtle),columns=['turtle_count']).reset_index()     
-        output1 =pd.merge(drone,tcounts,on=['groups'])
-        output1.to_csv(target[0],index=True)
+        tcounts =pd.DataFrame(drone.groupby('groups').apply(count_turtle),columns=['turtle_count'])
+        counts=tcounts.turtle_count.apply(lambda x:x['count']).reset_index()     
+        centers =tcounts.turtle_count.apply(lambda x:x['centers']).reset_index()   
+        centers.name= 'centers'
+        counts.name = 'counts'
+        output1 =pd.merge(drone,counts,on=['groups'])
+        output1 =pd.merge(output1,centers,on=['groups'])
+        output1.to_csv(targets[0],index=True)
         
     config = {"config": get_var('config', 'NO')}
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
     file_dep =os.path.join(basepath,cfg['paths']['process'],'labelmematchup_final_pointpos.csv')
-    target =os.path.join(basepath,cfg['paths']['process'],'labelmematchup_final_pointpos_turtles.csv')
+    target =os.path.join(basepath,cfg['paths']['process'],'turtles_list.csv')
     return {
         'actions':[process_turtles],
         'file_dep':[file_dep],
@@ -245,43 +397,91 @@ def task_process_turtles():
         'clean':True,
     }    
 
-def task_process_turtles_totals():
 
+
+def task_process_turtles_totals():
+    def from_np_array(array_string):
+        array_string = ','.join(array_string.replace('[ ', '[').split())
+        return np.array(ast.literal_eval(array_string))
     
     def process_turtles_totals(dependencies, targets):
+        def process_sruvey(grp):
+            crs = f'epsg:{int(grp["UtmCode"].min())}'
+            utmproj =Proj(crs)
+            points = np.vstack(grp.turtle_count_y)
+            data =pd.DataFrame(points,columns=['Easting','Norting'])
+            data['Longitude'],data['Latitude']=utmproj(points[:,0],points[:,1],inverse=True)
+            data['SurveyId'] = grp['SurveyId'].min()
+            return data
 
-
-
-        drone =pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
-        
-        drone['ImagePolygon']=drone.ImagePolygon.apply(shapely.wkt.loads)
-        drone.sort_values('TimeStamp',inplace=True)
-        drone['groups']=0
-        drone.loc[abs(drone.TimeStamp.diff().dt.total_seconds())>12,'groups']=1
-        drone['groups']=drone['groups'].cumsum()
-        tcounts =pd.DataFrame(drone.groupby('groups').apply(count_turtle),columns=['turtle_count']).reset_index()     
-        output1 =pd.merge(drone,tcounts,on=['groups'])
-        output1.to_csv(targets[0],index=True)
-
-
-    area =pd.DataFrame(surveys.groupby('Survey').apply(survey_area)/10000,columns=['Area'])
-    area.to_csv('../total_area.csv')
-        
+        drone =pd.read_csv(dependencies[0],parse_dates=['TimeStamp'],converters={'turtle_count_y': from_np_array})
+        drone = drone[drone.label.isin(['turtle_surface','turtle_jbs'])]
+        turtles =drone.groupby('groups').first().groupby('SurveyId').apply(process_sruvey)
+        turtles.to_csv(targets[0],index=False)        
     config = {"config": get_var('config', 'NO')}
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
-    file_dep =os.path.join(basepath,cfg['paths']['process'],'labelmematchup_final_pointpos_turtles.csv')
+    file_dep =os.path.join(basepath,cfg['paths']['process'],'turtles_list.csv')
     target =os.path.join(basepath,cfg['paths']['process'],'turtles_totals.csv')
     return {
-        'actions':[process_turtles],
+        'actions':[process_turtles_totals],
         'file_dep':[file_dep],
         'targets':[target],
         'clean':True,
-    }    
+    }  
 
+def task_plot_turtles():
+        def process_survey(dependencies, targets,apikey):
+            drone =pd.read_csv(list(dependencies)[0])
+            
+            px.set_mapbox_access_token(apikey)
+            fig = px.scatter_mapbox(drone, hover_name='SurveyId', lat="Latitude", lon="Longitude",  
+                                    mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=10)
+            fig.update_layout(mapbox_style="satellite-streets")
+            plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep =os.path.join(basepath,cfg['paths']['process'],'turtles_totals.csv')
+        targets = os.path.join(basepath,cfg['paths']['process'],'turtles_totals.html')
+        return {
 
+            'actions':[(process_survey, [],{'apikey':cfg['mapboxkey']})],
+            'file_dep':[file_dep],
+            'targets':[targets],
+            'clean':True,
+        }   
+        
+def task_turtles_report():
+        def process_survey(dependencies, targets):
+            turte_file = pd.read_csv(list(filter(lambda x: 'turtles_totals' in x, dependencies))[0])
+            turte_file['TotalTurtles'] =0
+            turtle = turte_file.groupby('SurveyId').count()
+            counts = turtle['TotalTurtles']
+            image_area = pd.read_csv(list(filter(lambda x: 'image' in x, dependencies))[0],index_col='SurveyId')
+            output =image_area.join(counts)
+            output['TurtlesPerHec'] = output['TotalTurtles']/output['Area']
+            output.to_csv(targets[0],index=True)
+            
 
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep =[os.path.join(basepath,cfg['paths']['process'],'turtles_totals.csv'),
+                   os.path.join(cfg['paths']['reports'],'image_coverage.csv')]
+        targets = os.path.join(cfg['paths']['reports'],'turtles_per_survey.csv')
+        return {
+
+            'actions':[process_survey],
+            'file_dep':file_dep,
+            'targets':[targets],
+            'clean':True,
+        }          
 
 if __name__ == '__main__':
     import doit

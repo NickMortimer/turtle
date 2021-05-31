@@ -5,6 +5,7 @@ import cv2
 from shapely.geometry import point
 from shapely.geometry import Polygon
 import geopandas as gp
+
 CCDSIZE =0.0132/5472
 class P4rtk:
     def __init__(self,dewarpdata,crs,imagewidth=5472,imageheight=3648,pixelsize=CCDSIZE):
@@ -15,12 +16,14 @@ class P4rtk:
         self.dewarp(dewarpdata)
         
     def setdronepos(self,easting,northing,altitude,gimblepitch,gimbleroll,gimbleyaw):
+        
         omga = np.deg2rad(gimblepitch)
         phi = np.deg2rad(gimbleroll)
         k = np.deg2rad(gimbleyaw)
         self.yaw = gimbleyaw
         self.pitch = omga
         self.roll = phi
+        self.altitude = altitude / np.cos(omga)
         rx = np.array([[1.,0,0],
                        [0,np.cos(omga),-np.sin(omga)],
                        [0,np.sin(omga),np.cos(omga)]])
@@ -31,7 +34,7 @@ class P4rtk:
                        [np.sin(k),np.cos(k),0],
                        [0,0,1]])
         self.R2 = rx.dot(ry).dot(rz)
-        self.Translation = np.array([0,0,-altitude])
+        self.Translation = np.array([0,0,-self.altitude])
         self.R= np.array([[np.cos(k)*np.cos(phi),                                 -np.sin(k)*np.cos(phi),np.sin(phi),0],
                         [np.cos(k)*np.sin(omga)*np.sin(phi)+np.sin(k)*np.cos(omga),np.cos(k)*np.cos(omga)-np.sin(k)*np.sin(omga)*np.sin(phi),-np.sin(omga)*np.cos(phi),0],
                         [np.sin(k)*np.sin(omga)-np.cos(k)*np.cos(omga)*np.sin(phi),np.sin(k)*np.cos(omga)*np.sin(phi)+np.cos(k)*np.sin(omga),np.cos(omga)*np.cos(phi),-altitude],
@@ -39,7 +42,7 @@ class P4rtk:
         self.Rinverse = np.linalg.inv(self.R)
         self.easting = easting
         self.northing = northing
-        self.altitude = altitude
+
         self.tocamm =    self.Km @ self.R 
         self.tocamp =    self.Kp @ self.R
         
@@ -135,66 +138,110 @@ class P4rtk:
 if __name__ == '__main__':
     data = np.array([3706.080000000000,3692.930000000000,-34.370000000000,-34.720000000000,-0.271104000000,0.116514000000,0.001092580000,0.000348025000,-0.040583200000])
     drone = P4rtk(data,'epsg:32749')
-    gcp =pd.read_csv("T:/drone/raw/process/labelmematchup_final_pointpos.csv")
-    gcp = gcp[gcp.label.isin(['gcp'])]
-    gcp.points = gcp.points.apply(ast.literal_eval)
-    jpegpoints = np.array(gcp.points.apply(lambda x:np.array(x[0],float)).tolist())
-    gcp[['JpegX','JpegY']] =np.floor(jpegpoints)
-    corrected =drone.jpegtoreal(jpegpoints)
-    gcp[['DewarpX','DewarpY']] =corrected
-    for index,row in gcp.iterrows():
+    
+
+    
+    pos = np.array([[802032.8034,7567463.695],
+                    [802048.426,7567451.398],
+                    [802064.192,7567439.234],
+                    [802079.7856,7567426.904],
+                    [802095.2718,7567414.612],
+                    [802095.2718,7567414.612],
+                    [802110.828,7567402.441],
+                    [802110.828,7567402.441],
+                    [802126.5876,7567390.135]])    
+
+
+    dewp = np.array([[3595.125459,1142.058386],
+                    [3639.290931,1397.887991],
+                    [3675.609441,1689.551665],
+                    [3722.276844,2039.64948],
+                    [3766.304999,2461.675643],
+                    [3649.863731,2726.028476],
+                    [3825.230811,2966.250073],
+                    [3675.540815,3294.81303],
+                    [3897.28448,3618.421782]])
+
+
+
+
+
+
+
+    import matplotlib.pyplot as plt
+    turtles = []
+    for p, dwp in zip(pos,dewp):
         #drone.setdronepos(row.Eastingrtk,row.Northingrtk,row.RelativeAltitude,-5,0,row.GimbalYawDegree)
-        drone.setdronepos(row.Eastingrtk,row.Northingrtk,row.EllipsoideHight+14.772+1,(90+row.GimbalPitchDegree)*-1,0,-row.GimbalYawDegree)
-        print(f'JPG:{drone.cameratorealworld(row.JpegX,row.JpegY)} warp:{drone.cameratorealworld(row.DewarpX,row.DewarpY)}')
+        drone.setdronepos(p[0],p[1],90+14.772,(90-45)*-1,0,-127.9)
+        turtles.append(drone.cameratorealworld(dwp[0],dwp[1]))
+    fig,ax = plt.subplots(figsize=(8,8))
+    for point in turtles:
+        ax.plot(point[0],point[1],marker ='x',linestyle='')
+    plt.show()
+    print(turtles)
+    
+    
+    
+#     gcp =pd.read_csv("T:/drone/raw/process/labelmematchup_final_pointpos.csv")
+#     gcp = gcp[gcp.label.isin(['gcp'])]
+#     gcp.points = gcp.points.apply(ast.literal_eval)
+#     jpegpoints = np.array(gcp.points.apply(lambda x:np.array(x[0],float)).tolist())
+#     gcp[['JpegX','JpegY']] =np.floor(jpegpoints)
+#     corrected =drone.jpegtoreal(jpegpoints)
+#     gcp[['DewarpX','DewarpY']] =corrected
+#     for index,row in gcp.iterrows():
+#         #drone.setdronepos(row.Eastingrtk,row.Northingrtk,row.RelativeAltitude,-5,0,row.GimbalYawDegree)
+#         drone.setdronepos(row.Eastingrtk,row.Northingrtk,row.EllipsoideHight+14.772+1,(90+row.GimbalPitchDegree)*-1,0,-row.GimbalYawDegree)
+#         print(f'JPG:{drone.cameratorealworld(row.JpegX,row.JpegY)} warp:{drone.cameratorealworld(row.DewarpX,row.DewarpY)}')
         
     
-    roll = 0
-    yaw = 90#-71.9
-    pitch = 20
-    drone.setdronepos(802621.0124,7567239.79844571,110,0,0,170.5)
+#     roll = 0
+#     yaw = 90#-71.9
+#     pitch = 20
+#     drone.setdronepos(802621.0124,7567239.79844571,110,0,0,170.5)
     
-    pixels =[[2078.361603,-9.819796173],
-            [2006.374942,670.0401841],
-            [1945.114351,1372.331906],
-            [1877.123314,2073.95085],
-            [1805.55692,2787.531148]]
-    dronepos = [[802621.0124,7567239.798],
-              [802617.8474,7567220.614],
-              [802614.4944,7567200.755],
-              [802611.3814,	7567181.235],
-              [802608.023,7567161.772]]
-    heading = [-170.5,-170,-170.8,-170.5,-170]
+#     pixels =[[2078.361603,-9.819796173],
+#             [2006.374942,670.0401841],
+#             [1945.114351,1372.331906],
+#             [1877.123314,2073.95085],
+#             [1805.55692,2787.531148]]
+#     dronepos = [[802621.0124,7567239.798],
+#               [802617.8474,7567220.614],
+#               [802614.4944,7567200.755],
+#               [802611.3814,	7567181.235],
+#               [802608.023,7567161.772]]
+#     heading = [-170.5,-170,-170.8,-170.5,-170]
 
-    for d,pix,h in zip(dronepos,pixels,heading):
-        drone.setdronepos(d[0],d[1],102,0,0,h)
-        print(f'warp:{drone.cameratorealworld(pix[0],pix[1])}')
+#     for d,pix,h in zip(dronepos,pixels,heading):
+#         drone.setdronepos(d[0],d[1],102,0,0,h)
+#         print(f'warp:{drone.cameratorealworld(pix[0],pix[1])}')
         
-    d =[drone.cameratorealworld(pos[0],pos[1]) for pos in pixels ]
-    speed =np.power(np.sum(np.power(np.diff(d,axis=0),2))/4,0.5)/2.5
-    print(f'warp:{drone.cameratorealworld(2078.361603,-9.819796173)}')
-    print(f'warp:{drone.cameratorealworld(2078.361603,-9.819796173)}')
-    print(f'warp:{drone.cameratorealworld(2078.361603,-9.819796173)}')
-    print(f'warp:{drone.cameratorealworld(2078.361603,-9.819796173)}')
+#     d =[drone.cameratorealworld(pos[0],pos[1]) for pos in pixels ]
+#     speed =np.power(np.sum(np.power(np.diff(d,axis=0),2))/4,0.5)/2.5
+#     print(f'warp:{drone.cameratorealworld(2078.361603,-9.819796173)}')
+#     print(f'warp:{drone.cameratorealworld(2078.361603,-9.819796173)}')
+#     print(f'warp:{drone.cameratorealworld(2078.361603,-9.819796173)}')
+#     print(f'warp:{drone.cameratorealworld(2078.361603,-9.819796173)}')
     
-    drone.setdronepos(802617.8474,7567220.614,110,0,0,170.5)
-    print(f'jpg:{drone.cameratorealworld(2119.67213,109.5081967)}')
-    print(f'warp:{drone.cameratorealworld(2078.361603,-9.819796173)}')
+#     drone.setdronepos(802617.8474,7567220.614,110,0,0,170.5)
+#     print(f'jpg:{drone.cameratorealworld(2119.67213,109.5081967)}')
+#     print(f'warp:{drone.cameratorealworld(2078.361603,-9.819796173)}')
     
-    #jpg:[ 802612.23434216 7567187.59899552       0.        ]
-    #warp:[ 802611.61166394 7567183.89099018       0.        ]
+#     #jpg:[ 802612.23434216 7567187.59899552       0.        ]
+#     #warp:[ 802611.61166394 7567183.89099018       0.        ]
     
-#1835.576923	2754.807692	1807.959126	2782.714366	802590.3348	7567129.807	802588.6399	7567190.571
+# #1835.576923	2754.807692	1807.959126	2782.714366	802590.3348	7567129.807	802588.6399	7567190.571
 
 
 
-    pos =drone.realwordtocamera(798217.3835,7555078.163)
-    print(pos,drone.cameratorealworld(pos[0],pos[1]))
-    for heading in range(0,360,10):
-        print(f'heading:{heading}')
-        drone.setdronepos(0,0,100,0,0,heading)
-        for x in range(0,10):
-            pos =drone.realwordtocamera(x*10,0)
-            print(pos,drone.cameratorealworld(pos[0],pos[1]))
+#     pos =drone.realwordtocamera(798217.3835,7555078.163)
+#     print(pos,drone.cameratorealworld(pos[0],pos[1]))
+#     for heading in range(0,360,10):
+#         print(f'heading:{heading}')
+#         drone.setdronepos(0,0,100,0,0,heading)
+#         for x in range(0,10):
+#             pos =drone.realwordtocamera(x*10,0)
+#             print(pos,drone.cameratorealworld(pos[0],pos[1]))
 
     
     
@@ -206,3 +253,27 @@ if __name__ == '__main__':
 		# cam1.at<float>(0, 0) = 3678.870000000000;			// fx
 		# cam1.at<float>(1, 1) = 3671.840000000000;			// fy
 		# cam1.at<float>(2, 2) = 1;
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

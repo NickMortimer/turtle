@@ -42,7 +42,15 @@ wanted ={"SourceFile","FileModifyDate","ImageDescription",
          "ImageHeight","GPSAltitude","GPSLatitude","GPSLongitude","CircleOfConfusion",
          "FOV","Latitude",'Longitude'}
 
-
+def convert_wgs_to_utm(lon, lat):
+    utm_band = str(int((np.floor((lon + 180) / 6 ) % 60) + 1))
+    if len(utm_band) == 1:
+        utm_band = '0'+utm_band
+    if lat >= 0:
+        epsg_code = '326' + utm_band
+    else:
+        epsg_code = '327' + utm_band
+    return epsg_code
 
 def task_create_json():
         config = {"config": get_var('config', 'NO')}
@@ -108,15 +116,6 @@ def task_process_json():
 
 @create_after(executed='process_json', target_regex='.*\exif.json')    
 def task_process_mergpos():
-        def convert_wgs_to_utm(lon, lat):
-            utm_band = str((np.floor((lon + 180) / 6 ) % 60) + 1)
-            if len(utm_band) == 1:
-                utm_band = '0'+utm_band
-            if lat >= 0:
-                epsg_code = '326' + utm_band
-            else:
-                epsg_code = '327' + utm_band
-            return epsg_code
         def process_transect(leg):
             leg = leg.copy()
             leg['GPSTime'] = leg.TimeStamp
@@ -309,8 +308,9 @@ def task_plot_surveys():
 
 def task_make_area_list():
         def split(path):
-            keys =os.path.split(os.path.dirname(path))[-1].split('_')
-            return {'SurveyCode':keys[0],'SurveyLongName':keys[1],'file':path}
+            print(path)
+            keys =os.path.splitext(os.path.basename(path))[0].split('_')
+            return {'SurveyCode':keys[0],'SurveyLongName':keys[1],'type':keys[2],'file':path}
         
         def process_area_list(dependencies, targets):
             areas = pd.DataFrame.from_records([split(shape) for shape in dependencies])
@@ -328,7 +328,46 @@ def task_make_area_list():
             'targets':[target],
             'clean':True,
         } 
-           
+        
+        
+def task_make_grids():
+    def process_grid(dependencies, targets,gridsize=25):
+        area = gp.read_file(dependencies[0])
+        utmcode = convert_wgs_to_utm(area.iloc[0].geometry.exterior.coords.xy[0][0],area.iloc[0].geometry.exterior.coords.xy[1][0])
+        crs = f'epsg:{utmcode}'
+        polygon = area.to_crs(crs).iloc[0].geometry
+        eastings =polygon.exterior.coords.xy[0]
+        northings =polygon.exterior.coords.xy[1]
+        easting =np.arange(np.min(eastings) -np.min(eastings) % gridsize,np.max(eastings) -np.max(eastings) % gridsize,gridsize)
+        northing=np.arange(np.min(northings) -np.min(northings) % gridsize,np.max(northings) -np.max(northings) % gridsize,gridsize)
+        xi,yi = np.meshgrid(easting,northing)
+        points =  MultiPoint(list(zip(xi.ravel(),yi.ravel())))
+        p =points.intersection(polygon)
+        d = {'Grid': ['25m'], 'geometry': [p]}
+        df =gp.GeoDataFrame(d, crs=crs)
+        df.to_file(targets[0])
+        
+
+# surveyarea =area.iloc[0].geometry
+# easting,northing =grid(surveyarea,20)
+# xi,yi = np.meshgrid(easting,northing)        
+
+
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['surveyarea']),'**/*.shp'),recursive=True)
+    for file in file_dep:
+        target = os.path.splitext(file)[0]+'_grid.shp'
+        yield {
+            'name':target,
+            'actions':[process_grid],
+            'file_dep':[file],
+            'targets':[target],
+            'clean':True,
+        } 
+        
 def task_assign_area():
         def load_shape(row):
             area = gp.read_file(row.file)
@@ -393,6 +432,35 @@ def task_make_surveys():
                 'targets':targets,
                 'clean':True,
             }   
+
+# def task_make_surveys_aoi():
+#         def process_surveys_aoi(dependencies, targets,cfg):
+#             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+#             for name,data in drone.groupby('Survey'):
+#                 data['Counter'] = 1
+#                 data['Counter'] = data['Counter'].cumsum()
+#                 data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
+#                 data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
+#                 filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
+#                 data.to_csv(filename,index=True)
+            
+#         config = {"config": get_var('config', 'NO')}
+#         with open(config['config'], 'r') as ymlfile:
+#             cfg = yaml.load(ymlfile, yaml.SafeLoader)
+#         basepath = os.path.dirname(config['config'])
+#         file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
+#         for file in file_dep:
+#             country = os.path.basename(file).split('_')[0]
+#             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
+#             target = os.path.splitext(file)[0]+'_aoi.csv'
+#             yield {
+#                 'name':file,
+#                 'actions':[process_surveys_aoi],
+#                 'file_dep':[file],
+#                 'targets':[target],
+#                 'uptodate': [True],
+#                 'clean':True,
+#             }            
             
 def task_survey_areas():
     def poly_to_points(polygon):
