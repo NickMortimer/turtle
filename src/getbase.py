@@ -59,6 +59,8 @@ def task_calc_basefiles():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
+        os.makedirs(os.path.join(basepath,cfg['paths']['process']),exist_ok=True)
+        os.makedirs(os.path.join(basepath,cfg['paths']['gnssceche']),exist_ok=True)
         file_dep =glob.glob(os.path.join(basepath,cfg['paths']['marksource']),recursive=True)
         target = os.path.join(basepath,cfg['paths']['process'],'basefiles.csv')
         return {
