@@ -369,256 +369,279 @@ def task_make_grids():
             'clean':True,
         } 
         
-# def task_assign_area():
-#         def load_shape(row):
-#             area = gp.read_file(row.File)
-#             area.id = row.SurveyCode
-#             return area
+def task_assign_area():
+        def load_shape(row):
+            area = gp.read_file(row.File)
+            area.id = row.SurveyCode
+            return area
         
-#         def setarea(group):
-#             group['id'] = group['id'].value_counts().index[0]
-#             return group
+        def setarea(group):
+            group['id'] = group['id'].value_counts().index[0]
+            return group
         
-#         def process_assign_area(dependencies, targets):
-#             surveyfile = list(filter(lambda x: 'surveys.csv' in x, dependencies))[0]
-#             areafile = list(filter(lambda x: 'surveyareas.csv' in x, dependencies))[0]
-#             drone =pd.read_csv(surveyfile,index_col='TimeStamp',parse_dates=['TimeStamp'])
-#             pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
-#             pnts.Survey = pnts.Survey.astype('int')
-#             areas =pd.read_csv(areafile)
-#             areas = areas[areas.Type=='SurveyArea']
-#             shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
-#             pnts = sjoin(pnts, shapes, how='left')
-#             pnts.loc[pnts.id.isna(),'id']=''
-#             pnts =pnts.groupby('Survey').apply(setarea)
-#             pnts.loc[pnts.id=='','id'] ='NOAREA'
-#             pnts.to_csv(targets[0])
+        def process_assign_area(dependencies, targets):
+            surveyfile = list(filter(lambda x: 'surveys.csv' in x, dependencies))[0]
+            areafile = list(filter(lambda x: 'surveyareas.csv' in x, dependencies))[0]
+            drone =pd.read_csv(surveyfile,index_col='TimeStamp',parse_dates=['TimeStamp'])
+            pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
+            pnts.Survey = pnts.Survey.astype('int')
+            areas =pd.read_csv(areafile)
+            areas = areas[areas.Type=='SurveyArea']
+            shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
+            pnts = sjoin(pnts, shapes, how='left')
+            pnts.loc[pnts.id.isna(),'id']=''
+            pnts =pnts.groupby('Survey').apply(setarea)
+            pnts.loc[pnts.id=='','id'] ='NOAREA'
+            pnts.to_csv(targets[0])
             
-#         config = {"config": get_var('config', 'NO')}
-#         with open(config['config'], 'r') as ymlfile:
-#             cfg = yaml.load(ymlfile, yaml.SafeLoader)
-#         basepath = os.path.dirname(config['config'])
-#         file_dep = [os.path.join(basepath,cfg['paths']['process'],'surveys.csv'),
-#                     os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv')]
-#         target = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
-#         return {
-#             'actions':[process_assign_area],
-#             'file_dep':file_dep,
-#             'targets':[target],
-#             'clean':True,
-#         }       
-# @create_after(executed='assign_area', target_regex='.*\exif.csv')         
-# def task_make_surveys():
-#         def process_surveys(dependencies, targets,cfg):
-#             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-#             for name,data in drone.groupby('Survey'):
-#                 data['Counter'] = 1
-#                 data['Counter'] = data['Counter'].cumsum()
-#                 data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
-#                 data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
-#                 filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
-#                 data.to_csv(filename,index=True)
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = [os.path.join(basepath,cfg['paths']['process'],'surveys.csv'),
+                    os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv')]
+        target = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
+        return {
+            'actions':[process_assign_area],
+            'file_dep':file_dep,
+            'targets':[target],
+            'clean':True,
+        }       
+@create_after(executed='assign_area', target_regex='.*\exif.csv')         
+def task_make_surveys():
+        def process_surveys(dependencies, targets,cfg):
+            drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            for name,data in drone.groupby('Survey'):
+                data['Counter'] = 1
+                data['Counter'] = data['Counter'].cumsum()
+                data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
+                data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}.JPG", axis=1)
+                filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
+                data.to_csv(filename,index=True)
             
-#         config = {"config": get_var('config', 'NO')}
-#         with open(config['config'], 'r') as ymlfile:
-#             cfg = yaml.load(ymlfile, yaml.SafeLoader)
-#         basepath = os.path.dirname(config['config'])
-#         file_dep = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
-#         if os.path.exists(file_dep):
-#             surveys =pd.read_csv(file_dep,index_col='TimeStamp',parse_dates=['TimeStamp']).groupby('Survey')
-#             targets = [os.path.join(basepath,cfg['paths']['process'],
-#                                     f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv') for name,data in surveys]
-#             return {
-#                 'actions':[(process_surveys,[],{'cfg':cfg})],
-#                 'file_dep':[file_dep],
-#                 'targets':targets,
-#                 'clean':True,
-#             }   
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
+        if os.path.exists(file_dep):
+            surveys =pd.read_csv(file_dep,index_col='TimeStamp',parse_dates=['TimeStamp']).groupby('Survey')
+            targets = [os.path.join(basepath,cfg['paths']['process'],
+                                    f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv') for name,data in surveys]
+            return {
+                'actions':[(process_surveys,[],{'cfg':cfg})],
+                'file_dep':[file_dep],
+                'targets':targets,
+                'clean':True,
+            }   
 
         
             
-# def task_survey_areas():
-#     def poly_to_points(polygon):
-#         return np.dstack(polygon.exterior.coords.xy)
+def task_survey_areas():
+    def poly_to_points(polygon):
+        return np.dstack(polygon.exterior.coords.xy)
     
-#     def survey_area(grp):
-#         p=MultiPoint(np.hstack(grp['ImagePolygon'].apply(poly_to_points))[0]).convex_hull
-#         return p.area
+    def survey_area(grp):
+        p=MultiPoint(np.hstack(grp['ImagePolygon'].apply(poly_to_points))[0]).convex_hull
+        return p.area
     
-#     def calculate_area(dependencies, targets):
-#         data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-#         crs = f'epsg:{int(data["UtmCode"][0])}'
-#         survey = data['SurveyId'][0]
-#         gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
-#         gdf['ImagePolygon'] = data.ImagePolygon.apply(shapely.wkt.loads)
-#         gdf['SurveyAreaHec'] = survey_area(gdf)/10000
-#         gdf.to_csv(targets[0],index=True)
+    def calculate_area(dependencies, targets):
+        data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        crs = f'epsg:{int(data["UtmCode"][0])}'
+        survey = data['SurveyId'][0]
+        gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
+        gdf['ImagePolygon'] = data.ImagePolygon.apply(shapely.wkt.loads)
+        gdf['SurveyAreaHec'] = survey_area(gdf)/10000
+        gdf.to_csv(targets[0],index=True)
         
-#     config = {"config": get_var('config', 'NO')}
-#     with open(config['config'], 'r') as ymlfile:
-#         cfg = yaml.load(ymlfile, yaml.SafeLoader)
-#     basepath = os.path.dirname(config['config'])
-#     file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'),recursive=True)
-#     for file in file_dep:
-#         target = file.replace('_survey','_survey_area')
-#         yield {
-#             'name':file,
-#             'actions':[calculate_area],
-#             'file_dep':[file],
-#             'targets':[target],
-#             'uptodate': [True],
-#             'clean':True,
-#         }            
-# def task_file_images():
-#         def process_images(dependencies, targets):
-#             survey = pd.read_csv(dependencies[0])
-#             destpath = os.path.dirname(targets[0])
-#             os.makedirs(destpath,exist_ok=True)
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'),recursive=True)
+    for file in file_dep:
+        target = file.replace('_survey','_survey_area')
+        yield {
+            'name':file,
+            'actions':[calculate_area],
+            'file_dep':[file],
+            'targets':[target],
+            'uptodate': [True],
+            'clean':True,
+        }            
+def task_file_images():
+        def process_images(dependencies, targets):
+            survey = pd.read_csv(dependencies[0])
+            destpath = os.path.dirname(targets[0])
+            os.makedirs(destpath,exist_ok=True)
 
-#             for index,row in survey.iterrows():
-#                 dest =os.path.join(destpath,row.NewName)
-#                 if not os.path.exists(dest):
-#                     shutil.copyfile(row.SourceFile,dest)
-#             shutil.copyfile(dependencies[0],targets[0])
+            for index,row in survey.iterrows():
+                dest =os.path.join(destpath,row.NewName)
+                if not os.path.exists(dest):
+                    shutil.copyfile(row.SourceFile,dest)
+            shutil.copyfile(dependencies[0],targets[0])
             
-#         config = {"config": get_var('config', 'NO')}
-#         with open(config['config'], 'r') as ymlfile:
-#             cfg = yaml.load(ymlfile, yaml.SafeLoader)
-#         basepath = os.path.dirname(config['config'])
-#         file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
-#         for file in file_dep:
-#             country = os.path.basename(file).split('_')[0]
-#             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
-#             target = os.path.join(cfg['paths']['output'],country,sitecode,os.path.basename(file))
-#             yield {
-#                 'name':file,
-#                 'actions':[process_images],
-#                 'file_dep':[file],
-#                 'targets':[target],
-#                 'uptodate': [True],
-#                 'clean':True,
-#             }  
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
+        for file in file_dep:
+            country = os.path.basename(file).split('_')[0]
+            sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
+            target = os.path.join(cfg['paths']['output'],country,sitecode,os.path.basename(file))
+            yield {
+                'name':file,
+                'actions':[process_images],
+                'file_dep':[file],
+                'targets':[target],
+                'uptodate': [True],
+                'clean':True,
+            }  
             
 
         
         
-# def task_geopgk_survey():
-#         def process_geo(dependencies, targets):
-#             data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-#             if "UtmCode" in data.columns:
-#                 crs = f'epsg:{int(data["UtmCode"][0])}'
-#                 survey = data['SurveyId'][0]
-#                 gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
-#                 gdf.to_file(targets[0], layer=survey, driver="GPKG")
+def task_geopgk_survey():
+        def process_geo(dependencies, targets):
+            data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            if "UtmCode" in data.columns:
+                crs = f'epsg:{int(data["UtmCode"][0])}'
+                survey = data['SurveyId'][0]
+                gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
+                gdf.to_file(targets[0], layer=survey, driver="GPKG")
 
             
-#         config = {"config": get_var('config', 'NO')}
-#         with open(config['config'], 'r') as ymlfile:
-#             cfg = yaml.load(ymlfile, yaml.SafeLoader)
-#         basepath = os.path.dirname(config['config'])
-#         file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey.csv'),recursive=True)
-#         for file in file_dep:
-#             target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
-#             target = os.path.join(cfg['paths']['reports'],target)
-#             #countries_gdf
-#             yield {
-#                 'name':file,
-#                 'actions':[process_geo],
-#                 'file_dep':[file],
-#                 'targets':[target],
-#                 'uptodate': [True],
-#                 'clean':True,
-#             }     
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey.csv'),recursive=True)
+        for file in file_dep:
+            target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
+            target = os.path.join(cfg['paths']['reports'],target)
+            #countries_gdf
+            yield {
+                'name':file,
+                'actions':[process_geo],
+                'file_dep':[file],
+                'targets':[target],
+                'uptodate': [True],
+                'clean':True,
+            }     
     
-# def task_check_survey():
-#         def process_check_survey(dependencies, targets):
-#             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-#             images = pd.DataFrame(glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*.JPG')),
-#                                   columns=['Path'])
-#             images['NewName'] = images['Path'].apply(os.path.basename)
-#             d =drone.join(images.set_index('NewName'),how='left',on=['NewName'],rsuffix="f")
-#             missing =d.Path.isna().sum()
-#             expected = d.NewName.count()
-#             coverage = 100*(expected-missing)/expected
-#             pd.DataFrame([{'SurveyId':d.SurveyId.max(),
-#                            'StartTime':d.index.min(),'EndTime':d.index.max(),
-#                            'Latitude':d.Latitude.mean(),'Longitude':d.Longitude.mean(),
-#                            'Coverage':coverage,'Expected':expected,
-#                            'Area':d.SurveyAreaHec.mean(),
-#                            'Missing':missing}]).to_csv(targets[0],index=False)
+def task_check_survey():
+        def process_check_survey(dependencies, targets):
+            drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+            images = pd.DataFrame(glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*.JPG')),
+                                  columns=['Path'])
+            images['NewName'] = images['Path'].apply(os.path.basename)
+            d =drone.join(images.set_index('NewName'),how='left',on=['NewName'],rsuffix="f")
+            missing =d.Path.isna().sum()
+            expected = d.NewName.count()
+            coverage = 100*(expected-missing)/expected
+            pd.DataFrame([{'SurveyId':d.SurveyId.max(),
+                           'StartTime':d.index.min(),'EndTime':d.index.max(),
+                           'Latitude':d.Latitude.mean(),'Longitude':d.Longitude.mean(),
+                           'Coverage':coverage,'Expected':expected,
+                           'Area':d.SurveyAreaHec.mean(),
+                           'Missing':missing}]).to_csv(targets[0],index=False)
             
-#         config = {"config": get_var('config', 'NO')}
-#         with open(config['config'], 'r') as ymlfile:
-#             cfg = yaml.load(ymlfile, yaml.SafeLoader)
-#         basepath = os.path.dirname(config['config'])
-#         file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey_area.csv'),recursive=True)
-#         for file in file_dep:
-#             target = file.replace('_survey_area.csv','_survey_area_summary.csv')
-#             yield {
-#                 'name':file,
-#                 'actions':[process_check_survey],
-#                 'file_dep':[file],
-#                 'targets':[target],
-#                 'uptodate': [True],
-#                 'clean':True,
-#             }  
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey_area.csv'),recursive=True)
+        for file in file_dep:
+            target = file.replace('_survey_area.csv','_survey_area_summary.csv')
+            yield {
+                'name':file,
+                'actions':[process_check_survey],
+                'file_dep':[file],
+                'targets':[target],
+                'uptodate': [True],
+                'clean':True,
+            }  
             
       
-# @create_after(executed='check_survey', target_regex='*_survey_summary')  
-# def task_concat_check_survey():
-#         def process_concat_check_survey(dependencies, targets):
-#             os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
-#             surveys =pd.concat([pd.read_csv(file) for file in dependencies])
-#             surveys =surveys.set_index('SurveyId').sort_index()
-#             surveys.to_csv(targets[0])
+@create_after(executed='check_survey', target_regex='*_survey_summary')  
+def task_concat_check_survey():
+        def process_concat_check_survey(dependencies, targets):
+            os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
+            surveys =pd.concat([pd.read_csv(file) for file in dependencies])
+            surveys =surveys.set_index('SurveyId').sort_index()
+            surveys.to_csv(targets[0])
             
-#         config = {"config": get_var('config', 'NO')}
-#         with open(config['config'], 'r') as ymlfile:
-#             cfg = yaml.load(ymlfile, yaml.SafeLoader)
-#         basepath = os.path.dirname(config['config'])
-#         file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey_area_summary.csv'),recursive=True)
-#         target = os.path.join(cfg['paths']['reports'],'image_coverage.csv')
-#         return {
-#             'actions':[process_concat_check_survey],
-#             'file_dep':file_dep,
-#             'targets':[target],
-#             'clean':True,
-#             }         
-# # def task_calculate_newname():
-# #     pass
-# #xifdata.apply(lambda item: f"{survey['dronetype']}_{survey['camera']}_{survey['country']}_{survey['surveycode']}_{survey['surveynumber']:03}_{item.LocalTime}_{item.Counter:04}.JPG", axis=1)       
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(cfg['paths']['output'],'**','*_survey_area_summary.csv'),recursive=True)
+        target = os.path.join(cfg['paths']['reports'],'image_coverage.csv')
+        return {
+            'actions':[process_concat_check_survey],
+            'file_dep':file_dep,
+            'targets':[target],
+            'clean':True,
+            }         
+# def task_calculate_newname():
+#     pass
+#xifdata.apply(lambda item: f"{survey['dronetype']}_{survey['camera']}_{survey['country']}_{survey['surveycode']}_{survey['surveynumber']:03}_{item.LocalTime}_{item.Counter:04}.JPG", axis=1)       
  
 
 
 def task_make_zarr():
     def process_zarr(dependencies, targets,cfg):
+        def cut_tile(item,easting,northing,pix,x,y,pixeldim,imageheight,imagewidth,squaresize=512):
+            ds = xr.Dataset()
+            if (y+squaresize/2 < imageheight) & ( y-squaresize/2>0) & (x-squaresize/2>0) & (x+squaresize/2 < imagewidth):
+                ds['image'] = xr.DataArray(pix[:,(y-squaresize//2):(y+squaresize//2),(x-squaresize//2):(x+squaresize//2)],
+                                        dims=['rgb','dy','dx'],coords={'rgb':['r','g','b'],'dy':pixeldim,'dx':pixeldim})
+                ds.coords['easting'] = easting
+                ds.coords['northing'] =northing
+                ds.coords['imagenumber'] = item.Counter
+            return  ds
+        
+        
         def process_row(item,points):
             drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
                              (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree)
             img = xr.open_rasterio(item.ImagePath) 
+            pixeldim=np.arange(-256,256)
+            result =[]
             for point in points:
                 imx,imy=drone.realwordtocamera(point[0],point[1])
-            pass
-
+                tile = cut_tile(item,point[0],point[1],img,int(imx),int(imy),pixeldim,item.ImageHeight,item.ImageWidth)
+                if tile.variables:
+                    result.append(tile)
+            if result:
+                result=xr.concat(result,dim='tile')
+            return result
+        
         surveyfile = list(filter(lambda x: '.csv' in x, dependencies))[0]
         gridfile = list(filter(lambda x: '.shp' in x, dependencies))[0]
         grid =gp.read_file(gridfile)
         data = pd.read_csv(surveyfile,parse_dates=['TimeStamp'])
         n =data.NewName.str.split('_',expand=True)
-        data['ImagePath']=cfg['paths']['output']+'/'+n[2]+'/'+n[3]+'_'+n[4]+'/'+data.NewName
+        data['ImagePath']=cfg['paths']['output']+'/'+n[2]+'/'+data.SurveyId+'/'+data.NewName
         crs = f'epsg:{int(data["UtmCode"][0])}'
         gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
         dewarp = pd.to_numeric(cfg['survey']['dewarp'] )
         drone =P4rtk(dewarp,crs)
         gridp = MultiPoint([(p.x,p.y) for p in grid.iloc[0].geometry])
+        zarr = []
         for index,row in gdf.iterrows():
             intersetion = gridp.intersection(row.geometry.buffer(-10))
             if intersetion.geom_type=='Point':
                 if intersetion.coords:
-                    process_row(row,[(intersetion.x,intersetion.y)])
+                    result=process_row(row,[(intersetion.x,intersetion.y)])
+                    zarr.append(result)
             elif intersetion.geom_type=='MultiPoint':
                 points=[(p.x,p.y) for p in intersetion]
-                process_row(row,points)
+                result=process_row(row,points)
+                zarr.append(result)
+        output = xr.concat(list(filter(lambda x: x,zarr)),dim='tile')
+        output.to_zarr(targets[0])
             
     # gdf['ImagePolygon'] = gdf.apply(getpoly,axis=1)
     # gdf.to_csv(targets[0])
@@ -657,6 +680,6 @@ def task_make_zarr():
          
 if __name__ == '__main__':
     import doit
-
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp'}
     #print(globals())
     doit.run(globals())
