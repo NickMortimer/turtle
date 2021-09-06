@@ -162,6 +162,30 @@ def task_move_nav():
                     'clean':True,
                 }          
 
+def task_move_nav_files():
+        def move_nav_files(dependencies, targets):
+            shutil.copy(dependencies[0],targets[0])
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource'],'gnss.csv'),recursive=True):
+            sourcepath = os.path.join(basepath,cfg['paths']['gnssceche'])
+            destpath = os.path.join(basepath,os.path.dirname(item))
+            files = pd.read_csv(item)
+            files.file =files.file.str.replace('crx.gz','rnx')
+            files.file =files.file.str.replace('rnx.gz','rnx')
+            for index,row in files.iterrows():
+                sourcefile = os.path.join(sourcepath,row.file)                
+                destfile = os.path.join(destpath,row.file)
+                yield {
+                    'name':destfile,
+                    'actions':[move_nav_files],
+                    'file_dep':[sourcefile],
+                    'targets':[destfile],
+                    'clean':True,
+                } 
+
 def task_rtk():
         def process_rtk(dependencies, targets):
             gnss_file = targets[0]
@@ -214,7 +238,7 @@ def task_calc_pic_pos():
         
 if __name__ == '__main__':
     import doit
-
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp'}
     #print(globals())
     doit.run(globals())        
                     
