@@ -621,7 +621,7 @@ def task_make_zarr():
         surveyfile = list(filter(lambda x: '.csv' in x, dependencies))[0]
         gridfile = list(filter(lambda x: '.shp' in x, dependencies))[0]
         grid =gp.read_file(gridfile)
-        data = pd.read_csv(surveyfile,parse_dates=['TimeStamp'])
+        data = pd.read_csv(surveyfile,parse_dates=['TimeStamp']).iloc[0:100]
         n =data.NewName.str.split('_',expand=True)
         data['ImagePath']=cfg['paths']['output']+'/'+n[2]+'/'+data.SurveyId+'/'+data.NewName
         crs = f'epsg:{int(data["UtmCode"][0])}'
