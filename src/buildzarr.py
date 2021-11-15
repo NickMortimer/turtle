@@ -82,8 +82,10 @@ def task_make_zarr():
                 points=[(p.x,p.y) for p in intersetion]
                 result=process_row(row,points)
                 zarr.append(result)
-        output = xr.concat(list(filter(lambda x: x,zarr)),dim='tile')
-        output.to_zarr(targets[0])
+        output =list(filter(lambda x: x,zarr))
+        if output:
+            output = xr.concat(output,dim='tile')
+            output.to_zarr(targets[0])
             
             
 
