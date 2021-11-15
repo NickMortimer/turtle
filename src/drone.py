@@ -89,8 +89,8 @@ class P4rtk:
     #https://github.com/dronemapper-io/dji-dewarp
 
     def dewarp(self,dewarpdata):
-        self.K = np.array([[dewarpdata[0],0,(self.imagewidth/2)+dewarpdata[2]],
-                [0,dewarpdata[1],(self.imageheight/2)+dewarpdata[3]],
+        self.K = np.array([[dewarpdata[0],0,(self.imagewidth/2)-dewarpdata[2]],
+                [0,dewarpdata[1],(self.imageheight/2)-dewarpdata[3]],
                 [0,0,1]])
         self.Kp = np.array([[dewarpdata[0],0,(self.imagewidth/2)+dewarpdata[2],0],
                         [0,dewarpdata[1],(self.imageheight/2)+dewarpdata[3],0],
@@ -99,7 +99,7 @@ class P4rtk:
                         [0,dewarpdata[1]*self.pixelsize,(self.imageheight/2+dewarpdata[3])*self.pixelsize,0],
                         [0,0,1,0]])
         self.Kminverse = np.linalg.inv(self.Km[0:3,0:3])
-        self.distCoeffs = dewarpdata[4:]
+        self.distCoeffs = np.array(dewarpdata[4:])
         
     def calculateposition(self,x,y):
         def to_real_wrold(index,altitude,focallen):
