@@ -85,7 +85,8 @@ def task_make_zarr():
         output =list(filter(lambda x: x,zarr))
         if output:
             output = xr.concat(output,dim='tile')
-            output.to_zarr(targets[0])
+            output =output.chunk({'tile':20,'dx':512, 'dy':512,'rgb':3})
+            output.to_zarr(targets[0],)
             
             
 
