@@ -29,7 +29,7 @@ import rasterio as rio
 
 def task_make_zarr():
     def process_zarr(dependencies, targets,cfg):
-        def cut_tile(item,easting,northing,pix,x,y,pixeldim,imageheight,imagewidth,squaresize=512):
+        def cut_tile(item,easting,northing,pix,x,y,pixeldim,imageheight,imagewidth,squaresize=32):
             ds = xr.Dataset()
             if (y+squaresize/2 < imageheight) & ( y-squaresize/2>0) & (x-squaresize/2>0) & (x+squaresize/2 < imagewidth):
                 ds['image'] = xr.DataArray(pix[:,(y-squaresize//2):(y+squaresize//2),(x-squaresize//2):(x+squaresize//2)],
@@ -86,7 +86,7 @@ def task_make_zarr():
         if output:
             output = xr.concat(output,dim='tile')
             output =output.chunk({'tile':20,'dx':512, 'dy':512,'rgb':3})
-            output.to_zarr(targets[0],)
+            output.to_zarr(targets[0])
             
             
 
