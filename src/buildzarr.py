@@ -44,7 +44,7 @@ def task_make_zarr():
             drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
                              (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree)
             img = xr.open_rasterio(item.ImagePath) 
-            pixeldim=np.arange(-256,256)
+            pixeldim=np.arange(-16,16)
             result =[]
             for point in points:
                 imx,imy=drone.realwordtocamera(point[0],point[1])
