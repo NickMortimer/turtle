@@ -29,7 +29,7 @@ import rasterio as rio
 
 def task_make_zarr():
     def process_zarr(dependencies, targets,cfg):
-        def cut_tile(item,easting,northing,pix,x,y,pixeldim,imageheight,imagewidth,squaresize=32):
+        def cut_tile(item,easting,northing,pix,x,y,pixeldim,imageheight,imagewidth,squaresize=512):
             ds = xr.Dataset()
             if (y+squaresize/2 < imageheight) & ( y-squaresize/2>0) & (x-squaresize/2>0) & (x+squaresize/2 < imagewidth):
                 ds['image'] = xr.DataArray(pix[:,(y-squaresize//2):(y+squaresize//2),(x-squaresize//2):(x+squaresize//2)],
@@ -44,7 +44,7 @@ def task_make_zarr():
             drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
                              (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree)
             img = xr.open_rasterio(item.ImagePath) 
-            pixeldim=np.arange(-16,16)
+            pixeldim=np.arange(-256,256)
             result =[]
             for point in points:
                 imx,imy=drone.realwordtocamera(point[0],point[1])
@@ -87,7 +87,10 @@ def task_make_zarr():
             output = xr.concat(output,dim='tile')
             output =output.chunk({'tile':20,'dx':512, 'dy':512,'rgb':3})
             output.to_zarr(targets[0])
-            
+    def zarr_check(target):
+        if os.path.exists(target):
+            return os.stat(target).st_ctime
+        return None
             
 
             
@@ -108,7 +111,7 @@ def task_make_zarr():
                 'actions':[(process_zarr, [],{'cfg':cfg})],
                 'file_dep':file_dep,
                 'targets':[target],
-                'uptodate': [True],
+                'uptodate': [zarr_check(target)],
                 'clean':True,
             }    
 
