@@ -20,12 +20,14 @@ from drone import P4rtk
 from read_rtk import read_mrk
 from pyproj import Proj 
 from doit.tools import check_timestamp_unchanged
+from doit.tools import config_changed
 import shutil
 from shapely.geometry import Polygon
 import shapely.wkt
 from shapely.geometry import MultiPoint
 import xarray as xr
 import rasterio as rio
+
 
 def task_make_zarr():
     def process_zarr(dependencies, targets,cfg):
@@ -87,10 +89,7 @@ def task_make_zarr():
             output = xr.concat(output,dim='tile')
             output =output.chunk({'tile':20,'dx':512, 'dy':512,'rgb':3})
             output.to_zarr(targets[0])
-    def zarr_check(target):
-        if os.path.exists(target):
-            return os.stat(target).st_ctime
-        return None
+
             
 
             
@@ -111,7 +110,7 @@ def task_make_zarr():
                 'actions':[(process_zarr, [],{'cfg':cfg})],
                 'file_dep':file_dep,
                 'targets':[target],
-                'uptodate': [zarr_check(target)],
+                'uptodate': [check_timestamp_unchanged(target, 'ctime')],
                 'clean':True,
             }    
 
