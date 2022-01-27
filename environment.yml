@@ -78,7 +78,6 @@ dependencies:
   - libgdal=3.2.2=ha6cada3_7
   - libglib=2.68.3=h1e62bf3_0
   - libiconv=1.16=he774522_0
-  - libkml=1.3.0=h9859afa_1013
   - liblapack=3.9.0=9_mkl
   - liblapacke=3.9.0=9_mkl
   - libnetcdf=4.8.0=nompi_hf689e7d_103
