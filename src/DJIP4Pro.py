@@ -26,7 +26,7 @@ import shapely.wkt
 from shapely.geometry import MultiPoint
 import xarray as xr
 import rasterio as rio
-import utils
+from  utils import convert_wgs_to_utm
 
 
  
