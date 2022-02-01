@@ -31,7 +31,7 @@ import utils
 
  
 
-@create_after(executed='process_json', target_regex='.*\exif.json')    
+ 
 def task_process_mergpos():
         def process_transect(leg):
             leg = leg.copy()
@@ -141,7 +141,6 @@ def task_addpolygons():
             'clean':True,
         }       
     
-@create_after(executed='process_json', target_regex='.*\exif.csv') 
 def task_merge_xif():
         def process_xif(dependencies, targets):
             target = list(targets)[0]
