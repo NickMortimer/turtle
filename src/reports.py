@@ -51,37 +51,7 @@ def task_survey_areas():
             'uptodate': [True],
             'clean':True,
         }            
-       
-        
-def task_geopgk_survey():
-        def process_geo(dependencies, targets):
-            data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-            if "UtmCode" in data.columns:
-                crs = f'epsg:{int(data["UtmCode"][0])}'
-                survey = data['SurveyId'][0]
-                gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
-                gdf.to_file(targets[0], layer=survey, driver="GPKG")
-
-            
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey.csv'),recursive=True)
-        for file in file_dep:
-            target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
-            target = os.path.join(cfg['paths']['reports'],target)
-            #countries_gdf
-            yield {
-                'name':file,
-                'actions':[process_geo],
-                'file_dep':[file],
-                'targets':[target],
-                'uptodate': [True],
-                'clean':True,
-            }   
-            
-            
+@create_after(executed='survey_areas', target_regex='*_survey_area.csv')       
 def task_check_survey():
     def process_check_survey(dependencies, targets):
         drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
@@ -113,50 +83,81 @@ def task_check_survey():
             'targets':[target],
             'uptodate': [True],
             'clean':True,
-        }  
+        } 
+                
+def task_geopgk_survey():
+    def process_geo(dependencies, targets):
+        data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        if "UtmCode" in data.columns:
+            crs = f'epsg:{int(data["UtmCode"][0])}'
+            survey = data['SurveyId'][0]
+            gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
+            gdf.to_file(targets[0], layer=survey, driver="GPKG")
+
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey.csv'),recursive=True)
+    for file in file_dep:
+        target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
+        target = os.path.join(cfg['paths']['reports'],target)
+        #countries_gdf
+        yield {
+            'name':file,
+            'actions':[process_geo],
+            'file_dep':[file],
+            'targets':[target],
+            'uptodate': [True],
+            'clean':True,
+        }   
+            
+            
+ 
             
       
 @create_after(executed='check_survey', target_regex='*_survey_summary')  
 def task_concat_check_survey():
-        def process_concat_check_survey(dependencies, targets):
-            os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
-            surveys =pd.concat([pd.read_csv(file) for file in dependencies])
-            surveys =surveys.set_index('SurveyId').sort_index()
-            surveys.to_csv(targets[0])
-            
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(cfg['paths']['process'],'*_survey_area_summary.csv'),recursive=True)
-        target = os.path.join(cfg['paths']['reports'],'image_coverage.csv')
-        return {
-            'actions':[process_concat_check_survey],
-            'file_dep':file_dep,
-            'targets':[target],
-            'clean':True,
-            }     
+    def process_concat_check_survey(dependencies, targets):
+        os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
+        surveys =pd.concat([pd.read_csv(file) for file in dependencies])
+        surveys =surveys.set_index('SurveyId').sort_index()
+        surveys.to_csv(targets[0])
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = glob.glob(os.path.join(cfg['paths']['process'],'*_survey_area_summary.csv'),recursive=True)
+    target = os.path.join(cfg['paths']['reports'],'image_coverage.csv')
+    return {
+        'actions':[process_concat_check_survey],
+        'file_dep':file_dep,
+        'targets':[target],
+        'clean':True,
+        }     
         
 def task_plot_surveys():
-        def process_survey(dependencies, targets,apikey):
-            drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-            px.set_mapbox_access_token(apikey)
-            fig = px.scatter_mapbox(drone, hover_name='Survey', lat="Latitude", lon="Longitude",  
-                                    mapbox_style="satellite-streets",color="Survey", size_max=30, zoom=10)
-            fig.update_layout(mapbox_style="satellite-streets")
-            plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
-            
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = os.path.join(basepath,cfg['paths']['process'],'surveys.csv')
-        targets = os.path.join(basepath,cfg['paths']['process'],'surveys.html')
-        return {
+    def process_survey(dependencies, targets,apikey):
+        drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        px.set_mapbox_access_token(apikey)
+        fig = px.scatter_mapbox(drone, hover_name='Survey', lat="Latitude", lon="Longitude",  
+                                mapbox_style="satellite-streets",color="Survey", size_max=30, zoom=10)
+        fig.update_layout(mapbox_style="satellite-streets")
+        plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = os.path.join(basepath,cfg['paths']['process'],'surveys.csv')
+    targets = os.path.join(basepath,cfg['paths']['process'],'surveys.html')
+    return {
 
-            'actions':[(process_survey, [],{'apikey':cfg['mapboxkey']})],
-            'file_dep':[file_dep],
-            'targets':[targets],
-            'clean':True,
-        }            
+        'actions':[(process_survey, [],{'apikey':cfg['mapboxkey']})],
+        'file_dep':[file_dep],
+        'targets':[targets],
+        'clean':True,
+    }            
                     
