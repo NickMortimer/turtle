@@ -117,39 +117,7 @@ def task_merge_xif():
         }
             
             
-def task_split_surveys():
-        def process_survey(dependencies, targets,timedelta,maxpitch):
-            drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-            #drone = drone[drone.GimbalPitchDegree<maxpitch].copy()
-            os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
-            drone.sort_index(inplace=True)
-            drone['Survey']=drone.index
-            drone['Survey']=drone['Survey'].diff()>pd.Timedelta(timedelta)
-            drone['Survey']=drone['Survey'].cumsum()+1
-            drone.to_csv(targets[1],index=True)
-            drone['StartTime'] =drone.index
-            drone['EndTime'] =drone.index
-            drone = drone[~drone.index.isna()]
-            starttime = drone.groupby('Survey').min()['StartTime']
-            endtime = drone.groupby('Survey').max()['EndTime']
-            count =   drone.groupby('Survey').count()['SourceFile'].rename('ImageCount')
-            position = drone.groupby('Survey').mean()[['Latitude','Longitude']]
-            position =position.join([starttime,endtime,count])
-            position.to_csv(targets[0],index=True)
-            
-            
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = os.path.join(basepath,cfg['paths']['process'],'mergeall.csv')
-        targets = (os.path.join(basepath,cfg['paths']['process'],'surveysummary.csv'),os.path.join(basepath,cfg['paths']['process'],'surveys.csv'))
-        return {
-            'actions':[(process_survey, [],{'timedelta':cfg['survey']['timedelta'],'maxpitch':cfg['survey']['maxpitch']})],
-            'file_dep':[file_dep],
-            'targets':targets,
-            'clean':True,
-        }              
+           
         
 if __name__ == '__main__':
     import doit
