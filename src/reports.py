@@ -72,6 +72,7 @@ def task_check_survey():
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
+    print(os.path.join(cfg['paths']['process'],'*_survey_area.csv'))
     file_dep = glob.glob(os.path.join(cfg['paths']['process'],'*_survey_area.csv'),recursive=True)
     print(f'files {file_dep}')
     for file in file_dep:
