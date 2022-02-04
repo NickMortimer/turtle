@@ -117,7 +117,8 @@ def task_file_images():
                 'uptodate': [True],
                 'clean':True,
             }  
-            
+
+
 def task_survey_areas():
     def poly_to_points(polygon):
         return np.dstack(polygon.exterior.coords.xy)
