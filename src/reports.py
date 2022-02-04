@@ -92,18 +92,18 @@ def task_check_survey():
             missing =d.Path.isna().sum()
             expected = d.NewName.count()
             coverage = 100*(expected-missing)/expected
-            pd.DataFrame([{'SurveyId':d.SurveyId.max(),
+            df=pd.DataFrame([{'SurveyId':d.SurveyId.max(),
                            'StartTime':d.index.min(),'EndTime':d.index.max(),
                            'Latitude':d.Latitude.mean(),'Longitude':d.Longitude.mean(),
                            'Coverage':coverage,'Expected':expected,
                            'Area':d.SurveyAreaHec.mean(),
                            'Missing':missing}]).to_csv(targets[0],index=False)
-            
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
         file_dep = glob.glob(os.path.join(cfg['paths']['process'],'*_survey_area.csv'),recursive=True)
+        print(f'files {file_dep}')
         for file in file_dep:
             target = file.replace('_survey_area.csv','_survey_area_summary.csv')
             yield {
