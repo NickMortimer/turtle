@@ -83,37 +83,37 @@ def task_geopgk_survey():
             
             
 def task_check_survey():
-        def process_check_survey(dependencies, targets):
-            drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-            images = pd.DataFrame(glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*.JPG')),
-                                  columns=['Path'])
-            images['NewName'] = images['Path'].apply(os.path.basename)
-            d =drone.join(images.set_index('NewName'),how='left',on=['NewName'],rsuffix="f")
-            missing =d.Path.isna().sum()
-            expected = d.NewName.count()
-            coverage = 100*(expected-missing)/expected
-            df=pd.DataFrame([{'SurveyId':d.SurveyId.max(),
-                           'StartTime':d.index.min(),'EndTime':d.index.max(),
-                           'Latitude':d.Latitude.mean(),'Longitude':d.Longitude.mean(),
-                           'Coverage':coverage,'Expected':expected,
-                           'Area':d.SurveyAreaHec.mean(),
-                           'Missing':missing}]).to_csv(targets[0],index=False)
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(cfg['paths']['process'],'*_survey_area.csv'),recursive=True)
-        print(f'files {file_dep}')
-        for file in file_dep:
-            target = file.replace('_survey_area.csv','_survey_area_summary.csv')
-            yield {
-                'name':file,
-                'actions':[process_check_survey],
-                'file_dep':[file],
-                'targets':[target],
-                'uptodate': [True],
-                'clean':True,
-            }  
+    def process_check_survey(dependencies, targets):
+        drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        images = pd.DataFrame(glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*.JPG')),
+                                columns=['Path'])
+        images['NewName'] = images['Path'].apply(os.path.basename)
+        d =drone.join(images.set_index('NewName'),how='left',on=['NewName'],rsuffix="f")
+        missing =d.Path.isna().sum()
+        expected = d.NewName.count()
+        coverage = 100*(expected-missing)/expected
+        df=pd.DataFrame([{'SurveyId':d.SurveyId.max(),
+                        'StartTime':d.index.min(),'EndTime':d.index.max(),
+                        'Latitude':d.Latitude.mean(),'Longitude':d.Longitude.mean(),
+                        'Coverage':coverage,'Expected':expected,
+                        'Area':d.SurveyAreaHec.mean(),
+                        'Missing':missing}]).to_csv(targets[0],index=False)
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = glob.glob(os.path.join(cfg['paths']['process'],'*_survey_area.csv'),recursive=True)
+    print(f'files {file_dep}')
+    for file in file_dep:
+        target = file.replace('_survey_area.csv','_survey_area_summary.csv')
+        yield {
+            'name':file,
+            'actions':[process_check_survey],
+            'file_dep':[file],
+            'targets':[target],
+            'uptodate': [True],
+            'clean':True,
+        }  
             
       
 @create_after(executed='check_survey', target_regex='*_survey_summary')  
