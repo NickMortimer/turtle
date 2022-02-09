@@ -140,7 +140,7 @@ def task_file_images():
             target = os.path.join(dest,os.path.basename(file))
             yield {
                 'name':file,
-                'actions':[(process_images, [],{'destination':dest})],
+                'actions':[process_images],
                 'file_dep':[file],
                 'targets':[target],
                 'uptodate': [True],
