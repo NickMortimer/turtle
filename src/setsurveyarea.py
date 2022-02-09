@@ -19,7 +19,7 @@ import shapely.wkt
 from shapely.geometry import MultiPoint
 from geopandas.tools import sjoin
 
-def task_split_surveys():
+def task_detect_surveys():
         def process_survey(dependencies, targets,timedelta,maxpitch):
             drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
             #drone = drone[drone.GimbalPitchDegree<maxpitch].copy()
@@ -44,7 +44,7 @@ def task_split_surveys():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = os.path.join(basepath,cfg['paths']['process'],'mergeall.csv')
+        file_dep = os.path.join(basepath,cfg['paths']['process'],'imagedata.csv')
         targets = (os.path.join(basepath,cfg['paths']['process'],'surveysummary.csv'),os.path.join(basepath,cfg['paths']['process'],'surveys.csv'))
         return {
             'actions':[(process_survey, [],{'timedelta':cfg['survey']['timedelta'],'maxpitch':cfg['survey']['maxpitch']})],

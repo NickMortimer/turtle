@@ -21,44 +21,7 @@ from geopandas.tools import sjoin
 
 
 
-def task_assign_area():
-        def load_shape(row):
-            area = gp.read_file(row.File)
-            area.id = row.SurveyCode
-            return area
-        
-        def setarea(group):
-            group['id'] = group['id'].value_counts().index[0]
-            return group
-        
-        def process_assign_area(dependencies, targets):
-            surveyfile = list(filter(lambda x: 'surveys.csv' in x, dependencies))[0]
-            areafile = list(filter(lambda x: 'surveyareas.csv' in x, dependencies))[0]
-            drone =pd.read_csv(surveyfile,index_col='TimeStamp',parse_dates=['TimeStamp'])
-            pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
-            pnts.Survey = pnts.Survey.astype('int')
-            areas =pd.read_csv(areafile)
-            areas = areas[areas.Type=='SurveyArea']
-            shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
-            pnts = sjoin(pnts, shapes, how='left')
-            pnts.loc[pnts.id.isna(),'id']=''
-            pnts =pnts.groupby('Survey').apply(setarea)
-            pnts.loc[pnts.id=='','id'] ='NOAREA'
-            pnts.to_csv(targets[0])
-            
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = [os.path.join(basepath,cfg['paths']['process'],'surveys.csv'),
-                    os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv')]
-        target = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
-        return {
-            'actions':[process_assign_area],
-            'file_dep':file_dep,
-            'targets':[target],
-            'clean':True,
-        }       
+ 
 @create_after(executed='assign_area', target_regex='.*\exif.csv')         
 def task_make_surveys():
         def process_surveys(dependencies, targets,cfg):
@@ -86,39 +49,10 @@ def task_make_surveys():
                 'file_dep':[file_dep],
                 'targets':targets,
                 'clean':True,
-            }   
-@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')                  
-def task_file_images():
-        def process_images(dependencies, targets):
-            survey = pd.read_csv(dependencies[0])
-            destpath = os.path.dirname(targets[0])
-            os.makedirs(destpath,exist_ok=True)
-
-            for index,row in survey.iterrows():
-                dest =os.path.join(destpath,row.NewName)
-                if not os.path.exists(dest):
-                    shutil.copyfile(row.SourceFile,dest)
-            shutil.copyfile(dependencies[0],targets[0])
+            } 
             
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'))
-        for file in file_dep:
-            country = os.path.basename(file).split('_')[0]
-            sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
-            target = os.path.join(cfg['paths']['output'],country,sitecode,os.path.basename(file))
-            yield {
-                'name':file,
-                'actions':[process_images],
-                'file_dep':[file],
-                'targets':[target],
-                'uptodate': [True],
-                'clean':True,
-            }  
             
-def task_survey_areas():
+def task_calculate_survey_areas():
     def poly_to_points(polygon):
         return np.dstack(polygon.exterior.coords.xy)
     
@@ -150,6 +84,73 @@ def task_survey_areas():
             'uptodate': [True],
             'clean':True,
         } 
+
+
+@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')                  
+def task_images_dest():
+        def process_images(dependencies, targets,destination):
+            survey = pd.read_csv(dependencies[0])
+            os.makedirs(destination,exist_ok=True)
+            survey['FileDest'] = survey['NewName'].apply(lambda x: os.path.join(destination,x))
+            survey.to_csv(targets[0],index=False)
+          
+            
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
+        for file in file_dep:
+            country = os.path.basename(file).split('_')[0]
+            sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
+            target = file.replace('_survey_area','_survey_data')
+            dest = os.path.join(cfg['paths']['output'],country,sitecode)
+            yield {
+                'name':file,
+                'actions':[(process_images, [],{'destination':dest})],
+                'file_dep':[file],
+                'targets':[target],
+                'uptodate': [True],
+                'clean':True,
+            } 
+
+@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')                  
+def task_file_images():
+        def process_images(dependencies, targets):
+            survey = pd.read_csv(dependencies[0])
+            destination =os.path.dirname(targets[0])
+            os.makedirs(destination,exist_ok=True)
+            for index,row in survey.iterrows():
+                if not os.path.exists(os.path.dirname(row.FileDest)):
+                    shutil.copyfile(row.SourceFile,row.FileDest)
+            shutil.copyfile(dependencies[0],dependencies[0])
+            
+            
+            
+        config = {"config": get_var('config', 'NO')}
+        with open(config['config'], 'r') as ymlfile:
+            cfg = yaml.load(ymlfile, yaml.SafeLoader)
+        basepath = os.path.dirname(config['config'])
+        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'))
+        for file in file_dep:
+            country = os.path.basename(file).split('_')[0]
+            sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
+            dest = os.path.join(cfg['paths']['output'],country,sitecode)
+            target = os.path.join(dest,os.path.basename(file))
+            yield {
+                'name':file,
+                'actions':[(process_images, [],{'destination':dest})],
+                'file_dep':[file],
+                'targets':[target],
+                'uptodate': [True],
+                'clean':True,
+            } 
+
+
+                      
+            
+
 
 if __name__ == '__main__':
     import doit

@@ -16,43 +16,17 @@ import shapely.wkt
 from shapely.geometry import MultiPoint
 
 
+config = {"config": get_var('config', 'NO')}
+with open(config['config'], 'r') as ymlfile:
+    cfg = yaml.load(ymlfile, yaml.SafeLoader)
+basepath = os.path.dirname(config['config'])
 
 
-
-def task_survey_areas():
-    def poly_to_points(polygon):
-        return np.dstack(polygon.exterior.coords.xy)
-    
-    def survey_area(grp):
-        p=MultiPoint(np.hstack(grp['ImagePolygon'].apply(poly_to_points))[0]).convex_hull
-        return p.area
-    
-    def calculate_area(dependencies, targets):
-        data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-        crs = f'epsg:{int(data["UtmCode"][0])}'
-        survey = data['SurveyId'][0]
-        gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
-        gdf['ImagePolygon'] = data.ImagePolygon.apply(shapely.wkt.loads)
-        gdf['SurveyAreaHec'] = survey_area(gdf)/10000
-        gdf.to_csv(targets[0],index=True)
-        
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'),recursive=True)
-    for file in file_dep:
-        target = file.replace('_survey','_survey_area')
-        yield {
-            'name':file,
-            'actions':[calculate_area],
-            'file_dep':[file],
-            'targets':[target],
-            'uptodate': [True],
-            'clean':True,
-        }            
+         
 @create_after(executed='survey_areas', target_regex='*_survey_area.csv')       
 def task_check_survey():
+    global cfg
+    global basepath    
     def process_check_survey(dependencies, targets):
         drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
         images = pd.DataFrame(glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*.JPG')),
@@ -68,10 +42,7 @@ def task_check_survey():
                         'Coverage':coverage,'Expected':expected,
                         'Area':d.SurveyAreaHec.mean(),
                         'Missing':missing}]).to_csv(targets[0],index=False)
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
+
     file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'),recursive=True)
     for file in file_dep:
         target = file.replace('_survey_area.csv','_survey_area_summary.csv')
@@ -146,9 +117,7 @@ def task_plot_surveys():
         fig.update_layout(mapbox_style="satellite-streets")
         plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
         
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+
     basepath = os.path.dirname(config['config'])
     file_dep = os.path.join(basepath,cfg['paths']['process'],'surveys.csv')
     targets = os.path.join(basepath,cfg['paths']['process'],'surveys.html')
@@ -158,5 +127,11 @@ def task_plot_surveys():
         'file_dep':[file_dep],
         'targets':[targets],
         'clean':True,
-    }            
+    }     
+    
+if __name__ == '__main__':
+    import doit
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp'}
+    #print(globals())
+    doit.run(globals())       
                     

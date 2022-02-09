@@ -78,16 +78,6 @@ def task_process_mergpos():
             drone['UtmCode'] =utmcode
             g = drone.groupby('Leg')
             drone =pd.concat([process_transect(leg) for name,leg in g])
-            mrk_file =list(filter(lambda x: '_Timestamp.MRK' in x, dependencies))
-            if mrk_file:
-                mrk =read_mrk(mrk_file[0])
-                mrk['Easting'],mrk['Northing'] =utmproj(mrk['Longitude'].values,mrk['Latitude'].values)
-                drone =drone.join(mrk,rsuffix='Mrk')
-            rtk_file=list(filter(lambda x: '_Timestamp.CSV' in x, dependencies))
-            if rtk_file:
-                rtk =pd.read_csv(rtk_file[0],parse_dates=['GPST'],index_col=['Sequence'])
-                rtk['Easting'],rtk['Northing'] =utmproj(rtk['longitude(deg)'].values,rtk['latitude(deg)'].values)
-                drone =drone.join(rtk,rsuffix='rtk')
             drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
             drone = drone[pd.notna(drone.index)]
@@ -101,7 +91,7 @@ def task_process_mergpos():
             source = os.path.join(basepath,os.path.dirname(item))
             file_dep  =  list(filter(lambda x:  any(f in x for f in ['exif.csv','Timestamp']), glob.glob(os.path.join(source,'*.*'))))
             if file_dep:
-                target =   os.path.join(source,'merge.csv')           
+                target =   os.path.join(source,'position.csv')           
                 yield {
                     'name':source,
                     'actions':[process_json],
@@ -131,8 +121,8 @@ def task_addpolygons():
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
     dewarp = pd.to_numeric(cfg['survey']['dewarp'] )
-    for file_dep in glob.glob(os.path.join(basepath,cfg['paths']['imagesource'],'merge.csv'),recursive=True):
-        target = os.path.join(basepath,os.path.dirname(file_dep),'merge_polygons.csv')   
+    for file_dep in glob.glob(os.path.join(basepath,cfg['paths']['imagesource'],'postion.csv'),recursive=True):
+        target = os.path.join(basepath,os.path.dirname(file_dep),'polygons.csv')   
         yield {
             'name':file_dep,
             'actions':[(process_polygons, [],{'dewarp':dewarp})],
@@ -154,11 +144,11 @@ def task_merge_xif():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'merge_polygons.csv')
+        searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'polygons.csv')
         file_dep = glob.glob(searchpath,recursive=True)
         processpath =os.path.join(basepath,cfg['paths']['process'])
         os.makedirs(processpath,exist_ok=True)
-        target = os.path.join(processpath,'mergeall.csv')
+        target = os.path.join(processpath,'imagedata.csv')
         return {
             'actions':[process_xif],
             'file_dep':file_dep,
