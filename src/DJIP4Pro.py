@@ -121,7 +121,7 @@ def task_addpolygons():
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
     dewarp = pd.to_numeric(cfg['survey']['dewarp'] )
-    for file_dep in glob.glob(os.path.join(basepath,cfg['paths']['imagesource'],'postion.csv'),recursive=True):
+    for file_dep in glob.glob(os.path.join(basepath,cfg['paths']['imagesource'],'position.csv'),recursive=True):
         target = os.path.join(basepath,os.path.dirname(file_dep),'polygons.csv')   
         yield {
             'name':file_dep,
