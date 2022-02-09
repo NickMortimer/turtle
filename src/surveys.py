@@ -22,7 +22,7 @@ from geopandas.tools import sjoin
 
 
  
-@create_after(executed='assign_area', target_regex='.*\exif.csv')         
+      
 def task_make_surveys():
         def process_surveys(dependencies, targets,cfg):
             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
@@ -51,7 +51,7 @@ def task_make_surveys():
                 'clean':True,
             } 
             
-            
+@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')             
 def task_calculate_survey_areas():
     def poly_to_points(polygon):
         return np.dstack(polygon.exterior.coords.xy)
@@ -86,7 +86,7 @@ def task_calculate_survey_areas():
         } 
 
 
-@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')                  
+@create_after(executed='calculate_survey_areas', target_regex='.*\surveyswitharea.csv')                  
 def task_images_dest():
         def process_images(dependencies, targets,destination):
             survey = pd.read_csv(dependencies[0])
@@ -115,7 +115,7 @@ def task_images_dest():
                 'clean':True,
             } 
 
-@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')                  
+@create_after(executed='images_dest', target_regex='.*\surveyswitharea.csv')                  
 def task_file_images():
         def process_images(dependencies, targets):
             survey = pd.read_csv(dependencies[0])
