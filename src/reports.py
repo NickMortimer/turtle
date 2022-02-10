@@ -45,7 +45,7 @@ def task_check_survey():
 
     file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'),recursive=True)
     for file in file_dep:
-        target = file.replace('*_survey_data.csv','_survey_summary.csv')
+        target = file.replace('_survey_data.csv','_survey_summary.csv')
         yield {
             'name':file,
             'actions':[process_check_survey],
