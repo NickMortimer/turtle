@@ -29,7 +29,7 @@ def task_check_survey():
     global basepath    
     def process_check_survey(dependencies, targets):
         drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-        images = pd.DataFrame(glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*.JPG')),
+        images = pd.DataFrame(glob.glob(os.path.join(drone['FileDest'].first(),'*.JPG')),
                                 columns=['Path'])
         images['NewName'] = images['Path'].apply(os.path.basename)
         d =drone.join(images.set_index('NewName'),how='left',on=['NewName'],rsuffix="f")
@@ -43,9 +43,9 @@ def task_check_survey():
                         'Area':d.SurveyAreaHec.mean(),
                         'Missing':missing}]).to_csv(targets[0],index=False)
 
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'),recursive=True)
     for file in file_dep:
-        target = file.replace('_survey_area.csv','_survey_area_summary.csv')
+        target = file.replace('*_survey_data.csv','_survey_summary.csv')
         yield {
             'name':file,
             'actions':[process_check_survey],
@@ -55,33 +55,7 @@ def task_check_survey():
             'clean':True,
         } 
                 
-def task_geopgk_survey():
-    def process_geo(dependencies, targets):
-        data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-        if "UtmCode" in data.columns:
-            crs = f'epsg:{int(data["UtmCode"][0])}'
-            survey = data['SurveyId'][0]
-            gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
-            gdf.to_file(targets[0], layer=survey, driver="GPKG")
-
-        
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey.csv'),recursive=True)
-    for file in file_dep:
-        target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
-        target = os.path.join(cfg['paths']['reports'],target)
-        #countries_gdf
-        yield {
-            'name':file,
-            'actions':[process_geo],
-            'file_dep':[file],
-            'targets':[target],
-            'uptodate': [True],
-            'clean':True,
-        }   
+  
             
             
  
@@ -99,7 +73,7 @@ def task_concat_check_survey():
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area_summary.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_summary.csv'),recursive=True)
     target = os.path.join(cfg['paths']['reports'],'image_coverage.csv')
     return {
         'actions':[process_concat_check_survey],
@@ -127,7 +101,35 @@ def task_plot_surveys():
         'file_dep':[file_dep],
         'targets':[targets],
         'clean':True,
-    }     
+    }    
+    
+def task_geopgk_survey():
+    def process_geo(dependencies, targets):
+        data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        if "UtmCode" in data.columns:
+            crs = f'epsg:{int(data["UtmCode"][0])}'
+            survey = data['SurveyId'][0]
+            gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
+            gdf.to_file(targets[0], layer=survey, driver="GPKG")
+
+        
+    config = {"config": get_var('config', 'NO')}
+    with open(config['config'], 'r') as ymlfile:
+        cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    basepath = os.path.dirname(config['config'])
+    file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey.csv'),recursive=True)
+    for file in file_dep:
+        target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
+        target = os.path.join(cfg['paths']['reports'],target)
+        #countries_gdf
+        yield {
+            'name':file,
+            'actions':[process_geo],
+            'file_dep':[file],
+            'targets':[target],
+            'uptodate': [True],
+            'clean':True,
+        }  
     
 if __name__ == '__main__':
     import doit
