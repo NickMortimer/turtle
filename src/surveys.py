@@ -32,7 +32,7 @@ def task_make_surveys():
                 #data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
                 data['Extension']=data['SourceFile'].apply(lambda x: os.path.splitext(x)[1]).str.upper()
                 data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
-                filename = os.path.join(basepath,cfg['paths']['process'],f"{data['SurveyId']}_survey.csv")                
+                filename = os.path.join(basepath,cfg['paths']['process'],f"{data['SurveyId'].min()}_survey.csv")                
                 data.to_csv(filename,index=True)
             
         config = {"config": get_var('config', 'NO')}
