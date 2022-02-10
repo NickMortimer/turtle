@@ -29,7 +29,7 @@ def task_check_survey():
     global basepath    
     def process_check_survey(dependencies, targets):
         drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-        images = pd.DataFrame(glob.glob(os.path.join(drone['FileDest'].min(),'*.JPG')),
+        images = pd.DataFrame(glob.glob(os.path.join(os.path.dirname(drone['FileDest'].min()),'*.JPG')),
                                 columns=['Path'])
         images['NewName'] = images['Path'].apply(os.path.basename)
         d =drone.join(images.set_index('NewName'),how='left',on=['NewName'],rsuffix="f")
