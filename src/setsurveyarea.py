@@ -63,7 +63,7 @@ def task_assign_area():
             group['id'] = group['id'].value_counts().index[0]
             return group
         
-        def process_assign_area(dependencies, targets):
+        def process_assign_area(dependencies, targets, countrycode):
             surveyfile = list(filter(lambda x: 'surveys.csv' in x, dependencies))[0]
             areafile = list(filter(lambda x: 'surveyareas.csv' in x, dependencies))[0]
             drone =pd.read_csv(surveyfile,index_col='TimeStamp',parse_dates=['TimeStamp'])
@@ -76,6 +76,17 @@ def task_assign_area():
             pnts.loc[pnts.id.isna(),'id']=''
             pnts =pnts.groupby('Survey').apply(setarea)
             pnts.loc[pnts.id=='','id'] ='NOAREA'
+            
+            pnts['SurveyId']=countrycode+'_'+pnts['id']+'_'+pnts[['ImageHeight','Survey']].groupby('Survey').transform(lambda x: x.index.min().strftime("%Y%m%dT%H%M"))['ImageHeight']
+                # data['Counter'] = 1
+                # data['Counter'] = data['Counter'].cumsum()
+                # data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
+                # data['Extension']=data['SourceFile'].apply(lambda x: os.path.splitext(x)[1]).str.upper()
+                # data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
+                # filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
+                # data.to_csv(filename,index=True)
+            
+            
             pnts.to_csv(targets[0])
             
         config = {"config": get_var('config', 'NO')}
@@ -86,7 +97,7 @@ def task_assign_area():
                     os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv')]
         target = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
         return {
-            'actions':[process_assign_area],
+            'actions':[(process_assign_area,[],{'countrycode':cfg["survey"]["country"]})],
             'file_dep':file_dep,
             'targets':[target],
             'clean':True,

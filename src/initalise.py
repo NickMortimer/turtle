@@ -55,41 +55,41 @@ def task_make_area_list():
         } 
         
         
-def task_make_grids():
-    def process_grid(dependencies, targets,gridsize=25):
-        area = gp.read_file(dependencies[0])
-        utmcode = convert_wgs_to_utm(area.iloc[0].geometry.exterior.coords.xy[0][0],area.iloc[0].geometry.exterior.coords.xy[1][0])
-        crs = f'epsg:{utmcode}'
-        polygon = area.to_crs(crs).iloc[0].geometry
-        eastings =polygon.exterior.coords.xy[0]
-        northings =polygon.exterior.coords.xy[1]
-        easting =np.arange(np.min(eastings) -np.min(eastings) % gridsize,np.max(eastings) -np.max(eastings) % gridsize,gridsize)
-        northing=np.arange(np.min(northings) -np.min(northings) % gridsize,np.max(northings) -np.max(northings) % gridsize,gridsize)
-        xi,yi = np.meshgrid(easting,northing)
-        points =  MultiPoint(list(zip(xi.ravel(),yi.ravel())))
-        p =points.intersection(polygon)
-        d = {'Grid': ['25m'], 'geometry': [p]}
-        df =gp.GeoDataFrame(d, crs=crs)
-        df.to_file(targets[0])        
-# surveyarea =area.iloc[0].geometry
-# easting,northing =grid(surveyarea,20)
-# xi,yi = np.meshgrid(easting,northing)        
+# def task_make_grids():
+#     def process_grid(dependencies, targets,gridsize=25):
+#         area = gp.read_file(dependencies[0])
+#         utmcode = convert_wgs_to_utm(area.iloc[0].geometry.exterior.coords.xy[0][0],area.iloc[0].geometry.exterior.coords.xy[1][0])
+#         crs = f'epsg:{utmcode}'
+#         polygon = area.to_crs(crs).iloc[0].geometry
+#         eastings =polygon.exterior.coords.xy[0]
+#         northings =polygon.exterior.coords.xy[1]
+#         easting =np.arange(np.min(eastings) -np.min(eastings) % gridsize,np.max(eastings) -np.max(eastings) % gridsize,gridsize)
+#         northing=np.arange(np.min(northings) -np.min(northings) % gridsize,np.max(northings) -np.max(northings) % gridsize,gridsize)
+#         xi,yi = np.meshgrid(easting,northing)
+#         points =  MultiPoint(list(zip(xi.ravel(),yi.ravel())))
+#         p =points.intersection(polygon)
+#         d = {'Grid': ['25m'], 'geometry': [p]}
+#         df =gp.GeoDataFrame(d, crs=crs)
+#         df.to_file(targets[0])        
+# # surveyarea =area.iloc[0].geometry
+# # easting,northing =grid(surveyarea,20)
+# # xi,yi = np.meshgrid(easting,northing)        
 
 
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['surveyarea']),'**/*_AOI.shp'),recursive=True)
-    for file in file_dep:
-        target = file.replace('_AOI.shp','_Grid.shp')
-        yield {
-            'name':target,
-            'actions':[process_grid],
-            'file_dep':[file],
-            'targets':[target],
-            'clean':True,
-        }         
+#     config = {"config": get_var('config', 'NO')}
+#     with open(config['config'], 'r') as ymlfile:
+#         cfg = yaml.load(ymlfile, yaml.SafeLoader)
+#     basepath = os.path.dirname(config['config'])
+#     file_dep = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['surveyarea']),'**/*_AOI.shp'),recursive=True)
+#     for file in file_dep:
+#         target = file.replace('_AOI.shp','_Grid.shp')
+#         yield {
+#             'name':target,
+#             'actions':[process_grid],
+#             'file_dep':[file],
+#             'targets':[target],
+#             'clean':True,
+#         }         
         
 if __name__ == '__main__':
     import doit
