@@ -78,6 +78,8 @@ def task_assign_area():
             pnts.loc[pnts.id=='','id'] ='NOAREA'
             
             pnts['SurveyId']=countrycode+'_'+pnts['id']+'_'+pnts[['ImageHeight','Survey']].groupby('Survey').transform(lambda x: x.index.min().strftime("%Y%m%dT%H%M"))['ImageHeight']
+            
+            
                 # data['Counter'] = 1
                 # data['Counter'] = data['Counter'].cumsum()
                 # data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
