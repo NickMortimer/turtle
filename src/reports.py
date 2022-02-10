@@ -23,7 +23,7 @@ basepath = os.path.dirname(config['config'])
 
 
          
-@create_after(executed='survey_areas', target_regex='*_survey_area.csv')       
+   
 def task_check_survey():
     global cfg
     global basepath    

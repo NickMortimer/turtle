@@ -124,7 +124,7 @@ def task_file_images():
             for index,row in survey.iterrows():
                 if not os.path.exists(os.path.dirname(row.FileDest)):
                     shutil.copyfile(row.SourceFile,row.FileDest)
-            shutil.copyfile(dependencies[0],dependencies[0])
+            shutil.copyfile(dependencies[0],targets[0])
             
             
             
