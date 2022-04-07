@@ -122,7 +122,7 @@ def task_file_images():
             destination =os.path.dirname(targets[0])
             os.makedirs(destination,exist_ok=True)
             for index,row in survey.iterrows():
-                if not os.path.exists(os.path.dirname(row.FileDest)):
+                if not os.path.exists(row.FileDest):
                     shutil.copyfile(row.SourceFile,row.FileDest)
             shutil.copyfile(dependencies[0],targets[0])
             
@@ -138,6 +138,7 @@ def task_file_images():
             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
             dest = os.path.join(cfg['paths']['output'],country,sitecode)
             target = os.path.join(dest,os.path.basename(file))
+            os.path.dirname
             yield {
                 'name':file,
                 'actions':[process_images],

@@ -39,6 +39,7 @@ def task_make_area_list():
         
         def process_area_list(dependencies, targets):
             areas = pd.DataFrame.from_records([split(shape) for shape in dependencies])
+            os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
             areas.to_csv(targets[0],index=False)                
             
         config = {"config": get_var('config', 'NO')}

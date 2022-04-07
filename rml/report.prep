@@ -1,0 +1,115 @@
+<!DOCTYPE document SYSTEM "rml_1_0.dtd">
+
+<document filename="invoice.pdf">
+
+<template pageSize="(595, 842)" leftMargin="0" rightMargin="0" showBoundary="0">
+	<pageTemplate id="first">
+        <!--get these right using showboundary-->
+        <frame id ="main_content" x1="57" y1="260" width="481" height="490"/>
+        <frame id ="footer_content" x1="57" y1="40" width="481" height="190"/>
+    </pageTemplate>
+</template>
+
+<stylesheet>
+    <paraStyle name="normal" fontName="Helvetica" fontSize="12" leading="14" alignment="JUSTIFY" textColor="black"/>
+    <paraStyle name="title" fontName="Helvetica-Bold" fontSize="20" leading="24" alignment="center" textColor="#1E4C9C" spaceAfter="20"/>
+    <paraStyle name="right" parent="normal" alignment="RIGHT"/>
+    <paraStyle name="footer" parent="normal" fontSize="9" leading="10"/>
+    <paraStyle name="table_normal" fontName="Helvetica" fontSize="11" leading="13"/>
+    <paraStyle name="table_desc_pt2" fontName="Helvetica" fontSize="9" leading="11"/>
+
+    <!--Table for bank details-->
+    <blockTableStyle id="detailtable" spaceAfter="10">
+        <blockFont name="Helvetica" size="11" leading="15"/>
+	    <blockTextColor colorName="black"/>
+        <lineStyle kind="None" colorName="black" thickness="0.5" start="0,0" stop="-1,-1"/>
+	    <blockValign value="TOP" start="0,0" stop="-1,0"/>
+	</blockTableStyle>
+    
+    <blockTableStyle id="banktable" spaceAfter="10">
+	    <lineStyle kind="OUTLINE" colorName="0x1E4C9C" thickness="1" start="0,0" stop="-1,-1"/>
+	    <blockValign value="TOP" start="0,0" stop="-1,-1"/>
+        <blockTopPadding length="8"/>
+        <blockBottomPadding length="15"/>
+        <blockLeftPadding length="15"/>
+        <blockRightPadding length="15"/>
+    </blockTableStyle>
+    <blockTableStyle id="invoicetable" spaceAfter="10">
+        <blockFont name="Helvetica" size="11" leading="13"/>
+	    <blockTextColor colorName="black"/>
+	    <lineStyle kind="LINEBELOW" colorName="grey" start="0,0" stop="-1,-2" thickness="0.2"/>
+        <blockTopPadding length="10" start="0,1" stop="-1,-1"/>
+        <blockBottomPadding length="10" start="0,1" stop="-1,-1"/>
+	    <!-- top row centered, bold and white on blue-->
+	    <blockAlignment value="center" start="0,0" stop="-1,0"/>
+	    <blockBackground colorName="#1E4C9C" start="0,0" stop="-1,0"/>
+        <blockFont name="Helvetica-Bold" size="11" leading="15" start="0,0" stop="-1,0"/>
+	    <blockTextColor colorName="white" start="0,0" stop="-1,0"/>
+        <!-- black line above the bottom row -->
+        <lineStyle kind="LINEBELOW" colorName="black" start="0,-1" stop="-1,-1" thickness="1"/>
+	</blockTableStyle>
+        <blockTableStyle id="totalBodyTableStyle" spaceAfter="10">
+	    <blockFont name="Helvetica" size="11" leading="13"/>
+	    <blockTextColor colorName="black"/>
+	    <blockValign value="TOP" start="0,0" stop="-1,-1"/>
+	    <blockAlignment value="center" start="0,0" stop="-1,0"/>
+        <lineStyle kind="LINEBELOW" colorName="black" start="-2,-1" stop="-1,-1" thickness="1"/>
+        <blockBottomPadding length="20" start="-1,0" stop="-1,-1"/>
+	</blockTableStyle>
+</stylesheet>
+
+<story>
+<para style="title">Invoice</para>
+
+    <blockTable style="invoicetable" colWidths="100%">
+    	<tr>
+    		<td align="LEFT">Description</td>
+    			<td align="DECIMAL">Unit Price</td>
+    			<td align="CENTER">Qty</td>
+				<td align="CENTER">Net</td>
+				<td align="CENTER">VAT</td>
+				<td align="DECIMAL">Gross</td>
+    	</tr>
+
+    {{for item in (data['orders'])}}
+        <tr>
+            <td><para style="table_normal">{{item['description']}}</para></td>
+            <td align="DECIMAL" rightPadding="20" vAlign="top">{{item['price']}}</td>
+            <td align="CENTER" vAlign="top">{{item['quantity']}}</td>
+            <td align="DECIMAL" rightPadding="20" vAlign="top">{{item['net']}}</td>  
+            <td align="CENTER" vAlign="top">{{item['vat']}}</td>
+            <td align="DECIMAL" rightPadding="15" vAlign="top">{{item['gross']}}</td>
+        </tr>
+    {{endfor}}
+
+    </blockTable>
+
+    <spacer length="10"/>
+  
+<blockTable style="banktable">
+ <tr>
+  <td>
+	<para style="normal" textColor="0x1E4C9C"><i>Payment details:</i></para>
+    <spacer length="6"/>
+
+			<para style="footer">We accept payment by bank transfer or credit card. <font color="red"> Please note Credit card payments will need to done by special arrangement and can incur additional charges.</font></para>
+			<para  style="footer">For international payments, we need a wire transfer and the <b>sender should pay all charges so we receive the correct cleared amount.  We cannot accept cheques.</b></para>
+			<indent left="20"/>
+			<pre style="footer">
+Bank: National World Bank
+Branch: Central Business Centre, 1 Bond lane, London SW99 ABC
+Account name: London Printers Ltd.
+Sort Code: 12-34-56
+Account no: 123456789
+IBAN:  BR12 ABC12 3456 1234 5678 12
+Swift Code: ABCDEFGH1Z
+			</pre>
+			<indent left="-20"/>
+
+    <spacer length="6"/>
+    <para style="footer">Please note that this is due immediately.</para>
+  </td>
+ </tr>
+</blockTable>
+    </story>
+</document>
