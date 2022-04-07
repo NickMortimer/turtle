@@ -14,13 +14,7 @@ import plotly.express as px
 import geopandas as gp
 import shapely.wkt
 from shapely.geometry import MultiPoint
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfbase.pdfmetrics import registerFont
-from rlextra.rml2pdf import rml2pdf
-#import jsondict#
-from rlextra.radxml.html_cleaner import cleanBlocks
-from rlextra.radxml.xhtml2rml import xhtml2rml
-import preppy
+
 
 
 # config = {"config": get_var('config', 'NO')}
