@@ -29,70 +29,70 @@ import xarray as xr
 import rasterio as rio
 
 
-def task_make_zarr():
-    def process_zarr(dependencies, targets,cfg):
-        def cut_tile(item,easting,northing,pix,x,y,pixeldim,imageheight,imagewidth,squaresize=512):
-            ds = xr.Dataset()
-            if (y+squaresize/2 < imageheight) & ( y-squaresize/2>0) & (x-squaresize/2>0) & (x+squaresize/2 < imagewidth):
-                ds['image'] = xr.DataArray(pix[:,(y-squaresize//2):(y+squaresize//2),(x-squaresize//2):(x+squaresize//2)],
-                                        dims=['rgb','dy','dx'],coords={'rgb':['r','g','b'],'dy':pixeldim,'dx':pixeldim})
-                ds.coords['easting'] = easting
-                ds.coords['northing'] =northing
-                ds.coords['imagenumber'] = item.Counter
-            return  ds
+# def task_make_zarr():
+#     def process_zarr(dependencies, targets,cfg):
+#         def cut_tile(item,easting,northing,pix,x,y,pixeldim,imageheight,imagewidth,squaresize=512):
+#             ds = xr.Dataset()
+#             if (y+squaresize/2 < imageheight) & ( y-squaresize/2>0) & (x-squaresize/2>0) & (x+squaresize/2 < imagewidth):
+#                 ds['image'] = xr.DataArray(pix[:,(y-squaresize//2):(y+squaresize//2),(x-squaresize//2):(x+squaresize//2)],
+#                                         dims=['rgb','dy','dx'],coords={'rgb':['r','g','b'],'dy':pixeldim,'dx':pixeldim})
+#                 ds.coords['easting'] = easting
+#                 ds.coords['northing'] =northing
+#                 ds.coords['imagenumber'] = item.Counter
+#             return  ds
         
         
-        def process_row(item,points):
-            drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
-                             (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree)
-            img = xr.open_rasterio(item.FileDest) 
-            pixeldim=np.arange(-256,256)
-            result =[]
-            for point in points:
-                imx,imy=drone.realwordtocamera(point[0],point[1])
-                tile = cut_tile(item,point[0],point[1],img,int(imx),int(imy),pixeldim,item.ImageHeight,item.ImageWidth)
-                if tile.variables:
-                    #gcps = [rio.control.GroundControlPoint(row=0, col=0, x=100, y=1169) ]
-                    #drone.jpegtoreal()
-                    result.append(tile)
-            if result:
-                result=xr.concat(result,dim='tile')
-            return result
+#         def process_row(item,points):
+#             drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
+#                              (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree)
+#             img = xr.open_rasterio(item.FileDest) 
+#             pixeldim=np.arange(-256,256)
+#             result =[]
+#             for point in points:
+#                 imx,imy=drone.realwordtocamera(point[0],point[1])
+#                 tile = cut_tile(item,point[0],point[1],img,int(imx),int(imy),pixeldim,item.ImageHeight,item.ImageWidth)
+#                 if tile.variables:
+#                     #gcps = [rio.control.GroundControlPoint(row=0, col=0, x=100, y=1169) ]
+#                     #drone.jpegtoreal()
+#                     result.append(tile)
+#             if result:
+#                 result=xr.concat(result,dim='tile')
+#             return result
         
-        surveyfile = list(filter(lambda x: '.csv' in x, dependencies))[0]
-        gridfile = list(filter(lambda x: '.shp' in x, dependencies))[0]
-        grid =gp.read_file(gridfile)
-        data = pd.read_csv(surveyfile,parse_dates=['TimeStamp'])
-        # sample = data.iloc[0:50]
-        # sample['idx'] =sample.index
-        # data = data[data.index.isin(np.hstack(sample.idx.apply(lambda x:range(x-2,x+3))))]
-        n =data.NewName.str.split('_',expand=True)
-        data['ImagePath']=cfg['paths']['output']+'/'+n[2]+'/'+data.SurveyId+'/'+data.NewName
-        crs = f'epsg:{int(data["UtmCode"].min())}'
-        gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
-        dewarp = pd.to_numeric(cfg['survey']['dewarp'] )
-        drone =P4rtk(dewarp,crs)
-        gridp = MultiPoint([(p.x,p.y) for p in grid.iloc[0].geometry])
-        zarr = []
-        for index,row in gdf.iterrows():
-            intersetion = gridp.intersection(row.geometry.buffer(-10))
-            if intersetion.geom_type=='Point':
-                if intersetion.coords:
-                    result=process_row(row,[(intersetion.x,intersetion.y)])
-                    zarr.append(result)
-            elif intersetion.geom_type=='MultiPoint':
-                points=[(p.x,p.y) for p in intersetion]
-                result=process_row(row,points)
-                zarr.append(result)
-        output =list(filter(lambda x: x,zarr))
-        if output:
-            output = xr.concat(output,dim='tile')
-            output =output.chunk({'tile':20,'dx':512, 'dy':512,'rgb':3})
-            gridp = 0
-            p =pd.DataFrame({'easting':output.easting,'northing':output.northing})
-            p['gridpoint']=p.groupby(['easting','northing']).ngroup()
-            output['gridpoint'] =(('tile'),(p['gridpoint']))
-            output.to_zarr(targets[0])
+#         surveyfile = list(filter(lambda x: '.csv' in x, dependencies))[0]
+#         gridfile = list(filter(lambda x: '.shp' in x, dependencies))[0]
+#         grid =gp.read_file(gridfile)
+#         data = pd.read_csv(surveyfile,parse_dates=['TimeStamp'])
+#         # sample = data.iloc[0:50]
+#         # sample['idx'] =sample.index
+#         # data = data[data.index.isin(np.hstack(sample.idx.apply(lambda x:range(x-2,x+3))))]
+#         n =data.NewName.str.split('_',expand=True)
+#         data['ImagePath']=cfg['paths']['output']+'/'+n[2]+'/'+data.SurveyId+'/'+data.NewName
+#         crs = f'epsg:{int(data["UtmCode"].min())}'
+#         gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
+#         dewarp = pd.to_numeric(cfg['survey']['dewarp'] )
+#         drone =P4rtk(dewarp,crs)
+#         gridp = MultiPoint([(p.x,p.y) for p in grid.iloc[0].geometry])
+#         zarr = []
+#         for index,row in gdf.iterrows():
+#             intersetion = gridp.intersection(row.geometry.buffer(-10))
+#             if intersetion.geom_type=='Point':
+#                 if intersetion.coords:
+#                     result=process_row(row,[(intersetion.x,intersetion.y)])
+#                     zarr.append(result)
+#             elif intersetion.geom_type=='MultiPoint':
+#                 points=[(p.x,p.y) for p in intersetion]
+#                 result=process_row(row,points)
+#                 zarr.append(result)
+#         output =list(filter(lambda x: x,zarr))
+#         if output:
+#             output = xr.concat(output,dim='tile')
+#             output =output.chunk({'tile':20,'dx':512, 'dy':512,'rgb':3})
+#             gridp = 0
+#             p =pd.DataFrame({'easting':output.easting,'northing':output.northing})
+#             p['gridpoint']=p.groupby(['easting','northing']).ngroup()
+#             output['gridpoint'] =(('tile'),(p['gridpoint']))
+#             output.to_zarr(targets[0])
 
             
 
