@@ -63,9 +63,9 @@ def task_make_zarr():
         gridfile = list(filter(lambda x: '.shp' in x, dependencies))[0]
         grid =gp.read_file(gridfile)
         data = pd.read_csv(surveyfile,parse_dates=['TimeStamp'])
-        sample = data.iloc[0:50]
-        sample['idx'] =sample.index
-        data = data[data.index.isin(np.hstack(sample.idx.apply(lambda x:range(x-2,x+3))))]
+        # sample = data.iloc[0:50]
+        # sample['idx'] =sample.index
+        # data = data[data.index.isin(np.hstack(sample.idx.apply(lambda x:range(x-2,x+3))))]
         n =data.NewName.str.split('_',expand=True)
         data['ImagePath']=cfg['paths']['output']+'/'+n[2]+'/'+data.SurveyId+'/'+data.NewName
         crs = f'epsg:{int(data["UtmCode"].min())}'
@@ -135,7 +135,7 @@ def task_export_tiles():
     for file in file_dep:
         target =os.path.join(basepath,cfg['paths']['output'],'tiles',os.path.splitext(os.path.basename(file))[0])
         yield {
-            'name':file,
+            'name':'tile'+file,
             'actions':[(process_tiles, [],{'cfg':cfg})],
             'file_dep':[file],
             'targets':[target],
