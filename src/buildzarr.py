@@ -115,7 +115,7 @@ def task_make_zarr():
                 'actions':[(process_zarr, [],{'cfg':cfg})],
                 'file_dep':file_dep,
                 'targets':[target],
-                'uptodate': [check_timestamp_unchanged(target, 'ctime')],
+                'uptodate': [True],
                 'clean':True,
             }    
 
