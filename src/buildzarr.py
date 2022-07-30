@@ -115,7 +115,7 @@ def task_make_zarr():
                 'actions':[(process_zarr, [],{'cfg':cfg})],
                 'file_dep':file_dep,
                 'targets':[target],
-                'uptodate': [True],
+                'uptodate': [check_timestamp_unchanged(target, 'ctime')],
                 'clean':True,
             }    
 
@@ -135,11 +135,11 @@ def task_export_tiles():
     for file in file_dep:
         target =os.path.join(basepath,cfg['paths']['output'],'tiles',os.path.splitext(os.path.basename(file))[0])
         yield {
-            'name':'tile'+file,
+            'name':file,
             'actions':[(process_tiles, [],{'cfg':cfg})],
             'file_dep':[file],
             'targets':[target],
-            'uptodate': [True],
+            'uptodate': [check_timestamp_unchanged(target, 'ctime')],
             'clean':True,
         }  
 # from sklearn.cluster import SpectralClustering
