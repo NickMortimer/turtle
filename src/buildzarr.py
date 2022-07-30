@@ -97,27 +97,27 @@ import rasterio as rio
             
 
             
-    config = {"config": get_var('config', 'NO')}
-    basepath = os.path.dirname(config['config'])
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'))
-    areas = pd.read_csv(os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv'),index_col='SurveyCode')
-    areas = areas.loc[areas.Type=='Grid']
-    for file in file_dep:
-        surveyarea =os.path.basename(file).split('_')[1]
-        if surveyarea in areas.index:
-            file_dep =[file,areas.loc[surveyarea].File]
-            target = os.path.join(basepath,cfg['paths']['zarrpath'],os.path.basename(file).replace('_survey_data.csv','.zarr'))
-            os.makedirs(target,exist_ok=True)
-            yield {
-                'name':file,
-                'actions':[(process_zarr, [],{'cfg':cfg})],
-                'file_dep':file_dep,
-                'targets':[target],
-                'uptodate': [check_timestamp_unchanged(target, 'ctime')],
-                'clean':True,
-            }    
+    # config = {"config": get_var('config', 'NO')}
+    # basepath = os.path.dirname(config['config'])
+    # with open(config['config'], 'r') as ymlfile:
+    #     cfg = yaml.load(ymlfile, yaml.SafeLoader)
+    # file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'))
+    # areas = pd.read_csv(os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv'),index_col='SurveyCode')
+    # areas = areas.loc[areas.Type=='Grid']
+    # for file in file_dep:
+    #     surveyarea =os.path.basename(file).split('_')[1]
+    #     if surveyarea in areas.index:
+    #         file_dep =[file,areas.loc[surveyarea].File]
+    #         target = os.path.join(basepath,cfg['paths']['zarrpath'],os.path.basename(file).replace('_survey_data.csv','.zarr'))
+    #         os.makedirs(target,exist_ok=True)
+    #         yield {
+    #             'name':file,
+    #             'actions':[(process_zarr, [],{'cfg':cfg})],
+    #             'file_dep':file_dep,
+    #             'targets':[target],
+    #             'uptodate': [check_timestamp_unchanged(target, 'ctime')],
+    #             'clean':True,
+    #         }    
 
 def task_export_tiles():
     def process_tiles(dependencies, targets,cfg):
