@@ -79,12 +79,13 @@ def get_base(date,station='EXMT00AUS',host='ftp://',destination='T:/drone/raw/gn
 def read_mrk(filename,leapseconds=37,index='Sequence'):
     names=['Sequence','GPSSecondOfWeek','GPSWeekNumber','NorthOff','EastOff','VelOff','Latitude','Longitude','EllipsoideHight','Error','RTKFlag']
     data = pd.read_csv(filename,header=None,sep='\t',names=names)
-    data['Latitude']=data.Latitude.str.split(',',expand=True)[0].astype(float)
-    data['Longitude']=data.Longitude.str.split(',',expand=True)[0].astype(float)
-    data['GPSWeekNumber']=data.GPSWeekNumber.str[1:-1].astype(int)
-    data['UTCTime'] =data.apply(lambda x: pd.to_datetime("1980-01-06 00:00:00")+pd.Timedelta(weeks=x['GPSWeekNumber'])+pd.Timedelta(seconds=x.GPSSecondOfWeek)
-                                -pd.Timedelta(seconds=leapseconds),axis=1)
-    data.set_index(index,inplace=True)
+    if data.shape[0]>0:
+        data['Latitude']=data.Latitude.str.split(',',expand=True)[0].astype(float)
+        data['Longitude']=data.Longitude.str.split(',',expand=True)[0].astype(float)
+        data['GPSWeekNumber']=data.GPSWeekNumber.str[1:-1].astype(int)
+        data['UTCTime'] =data.apply(lambda x: pd.to_datetime("1980-01-06 00:00:00")+pd.Timedelta(weeks=x['GPSWeekNumber'])+pd.Timedelta(seconds=x.GPSSecondOfWeek)
+                                    -pd.Timedelta(seconds=leapseconds),axis=1)
+        data.set_index(index,inplace=True)
     return data 
 def read_mrk_gpst(filename,index='UTCTime'):
     return read_mrk(filename,leapseconds=0,index=index)

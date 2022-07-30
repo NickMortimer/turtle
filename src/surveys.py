@@ -123,6 +123,7 @@ def task_file_images():
             os.makedirs(destination,exist_ok=True)
             for index,row in survey.iterrows():
                 if not os.path.exists(row.FileDest):
+                    #os.symlink(row.SourceFile, row.FileDest)
                     shutil.copyfile(row.SourceFile,row.FileDest)
             shutil.copyfile(dependencies[0],targets[0])
             

@@ -8,7 +8,7 @@ from doit import get_var
 from doit.tools import run_once
 from doit import create_after
 import numpy as np
-from utils import convert_wgs_to_utm
+
 
 
 wanted ={"SourceFile","FileModifyDate","ImageDescription",
@@ -54,23 +54,24 @@ def task_process_json():
             source_file =dependencies[0]
             print('source file is: {0}'.format(source_file))
             print('output dir is: {0}'.format(list(targets)[0]))
-            drone = pd.read_json(source_file)
-            def get_longitude(item):
-                longitude =float(item[0]) + float(item[2][0:-1])/60 + float(item[3][0:-1])/3600
-                return (longitude)
-            drone['Longitude'] = np.nan
-            drone['Latitude'] = np.nan
-            drone.loc[ ~drone['GPSLongitude'].isna(),'Longitude']=drone.loc[ ~drone['GPSLongitude'].isna(),'GPSLongitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
-            drone.loc[ ~drone['GPSLatitude'].isna(),'Latitude']=drone.loc[ ~drone['GPSLatitude'].isna(),'GPSLatitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
-            drone.loc[drone['GPSLatitudeRef']=='South','Latitude'] =drone.loc[drone['GPSLatitudeRef']=='South','Latitude']*-1
-            #drone = drone[drone.columns[drone.columns.isin(wanted)]]
-            if 'SubSecDateTimeOriginal' in drone.columns:
-                drone['TimeStamp'] = pd.to_datetime(drone.SubSecDateTimeOriginal,format='%Y:%m:%d %H:%M:%S.%f')
-            else:
-                drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
-            drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d+)\.(jpg|JPG)')['Sequence']
-            drone.set_index('Sequence',inplace=True)
-            drone.to_csv(list(targets)[0],index=True)
+            if os.stat(source_file).st_size > 0:
+                drone = pd.read_json(source_file)
+                def get_longitude(item):
+                    longitude =float(item[0]) + float(item[2][0:-1])/60 + float(item[3][0:-1])/3600
+                    return (longitude)
+                drone['Longitude'] = np.nan
+                drone['Latitude'] = np.nan
+                drone.loc[ ~drone['GPSLongitude'].isna(),'Longitude']=drone.loc[ ~drone['GPSLongitude'].isna(),'GPSLongitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
+                drone.loc[ ~drone['GPSLatitude'].isna(),'Latitude']=drone.loc[ ~drone['GPSLatitude'].isna(),'GPSLatitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
+                drone.loc[drone['GPSLatitudeRef']=='South','Latitude'] =drone.loc[drone['GPSLatitudeRef']=='South','Latitude']*-1
+                #drone = drone[drone.columns[drone.columns.isin(wanted)]]
+                if 'SubSecDateTimeOriginal' in drone.columns:
+                    drone['TimeStamp'] = pd.to_datetime(drone.SubSecDateTimeOriginal,format='%Y:%m:%d %H:%M:%S.%f')
+                else:
+                    drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
+                drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d+)\.(jpg|JPG)')['Sequence']
+                drone.set_index('Sequence',inplace=True)
+                drone.to_csv(list(targets)[0],index=True)
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:

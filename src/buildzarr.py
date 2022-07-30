@@ -45,7 +45,7 @@ def task_make_zarr():
         def process_row(item,points):
             drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
                              (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree)
-            img = xr.open_rasterio(item.ImagePath) 
+            img = xr.open_rasterio(item.FileDest) 
             pixeldim=np.arange(-256,256)
             result =[]
             for point in points:
@@ -63,7 +63,7 @@ def task_make_zarr():
         gridfile = list(filter(lambda x: '.shp' in x, dependencies))[0]
         grid =gp.read_file(gridfile)
         data = pd.read_csv(surveyfile,parse_dates=['TimeStamp'])
-        sample = data.sample(25)
+        sample = data.iloc[0:50]
         sample['idx'] =sample.index
         data = data[data.index.isin(np.hstack(sample.idx.apply(lambda x:range(x-2,x+3))))]
         n =data.NewName.str.split('_',expand=True)
@@ -88,6 +88,10 @@ def task_make_zarr():
         if output:
             output = xr.concat(output,dim='tile')
             output =output.chunk({'tile':20,'dx':512, 'dy':512,'rgb':3})
+            gridp = 0
+            p =pd.DataFrame({'easting':output.easting,'northing':output.northing})
+            p['gridpoint']=p.groupby(['easting','northing']).ngroup()
+            output['gridpoint'] =(('tile'),(p['gridpoint']))
             output.to_zarr(targets[0])
 
             
@@ -97,14 +101,15 @@ def task_make_zarr():
     basepath = os.path.dirname(config['config'])
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'))
+    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'))
     areas = pd.read_csv(os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv'),index_col='SurveyCode')
     areas = areas.loc[areas.Type=='Grid']
     for file in file_dep:
         surveyarea =os.path.basename(file).split('_')[1]
         if surveyarea in areas.index:
             file_dep =[file,areas.loc[surveyarea].File]
-            target = os.path.join(basepath,cfg['paths']['zarrpath'],os.path.basename(file).replace('_survey.csv','.zarr'))
+            target = os.path.join(basepath,cfg['paths']['zarrpath'],os.path.basename(file).replace('_survey_data.csv','.zarr'))
+            os.makedirs(target,exist_ok=True)
             yield {
                 'name':file,
                 'actions':[(process_zarr, [],{'cfg':cfg})],
@@ -114,24 +119,21 @@ def task_make_zarr():
                 'clean':True,
             }    
 
-from sklearn.cluster import SpectralClustering
-def task_sample_tiles():
+def task_export_tiles():
     def process_tiles(dependencies, targets,cfg):
         tiles = xr.open_dataset(dependencies[0],engine='zarr')
         tiles.image.attrs['nodatavals'] =[0,0,0]
         tiles =tiles.rename({'dx':'x','dy':'y'})
-        spectra =tiles.image.mean(dim=['x','y'])
-        clustering = SpectralClustering(n_clusters=4,assign_labels='discretize',random_state=0).fit(spectra)
         os.makedirs(targets[0],exist_ok=True)
         for index in range(0,len(tiles.image)):
-            tiles.image[index].rio.to_raster(os.path.join(targets[0],f'{clustering.labels_[index]:02d}_{index:04d}.JPG'), compress='zstd', zstd_level=1, num_threads='all_cpus', tiled=True, dtype='uint8', predictor=2)       
+            tiles.image[index].rio.to_raster(os.path.join(targets[0],f'{os.path.basename(targets[0])}_Tile_{tiles.gridpoint[index].values:04d}_{tiles.imagenumber[index].values:03d}.JPG'), compress='zstd', zstd_level=1, num_threads='all_cpus', tiled=True, dtype='uint8', predictor=2)       
     config = {"config": get_var('config', 'NO')}
     basepath = os.path.dirname(config['config'])
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     file_dep = glob.glob(os.path.join(os.path.join(basepath,cfg['paths']['zarrpath'],'*.zarr')))
     for file in file_dep:
-        target =os.path.join(basepath,cfg['paths']['output'],'train','tiles',os.path.splitext(os.path.basename(file))[0])
+        target =os.path.join(basepath,cfg['paths']['output'],'tiles',os.path.splitext(os.path.basename(file))[0])
         yield {
             'name':file,
             'actions':[(process_tiles, [],{'cfg':cfg})],
@@ -140,6 +142,32 @@ def task_sample_tiles():
             'uptodate': [True],
             'clean':True,
         }  
+# from sklearn.cluster import SpectralClustering
+# def task_sample_tiles():
+#     def process_tiles(dependencies, targets,cfg):
+#         tiles = xr.open_dataset(dependencies[0],engine='zarr')
+#         tiles.image.attrs['nodatavals'] =[0,0,0]
+#         tiles =tiles.rename({'dx':'x','dy':'y'})
+#         spectra =tiles.image.mean(dim=['x','y'])
+#         clustering = SpectralClustering(n_clusters=4,assign_labels='discretize',random_state=0).fit(spectra)
+#         os.makedirs(targets[0],exist_ok=True)
+#         for index in range(0,len(tiles.image)):
+#             tiles.image[index].rio.to_raster(os.path.join(targets[0],f'{clustering.labels_[index]:02d}_{index:04d}.JPG'), compress='zstd', zstd_level=1, num_threads='all_cpus', tiled=True, dtype='uint8', predictor=2)       
+#     config = {"config": get_var('config', 'NO')}
+#     basepath = os.path.dirname(config['config'])
+#     with open(config['config'], 'r') as ymlfile:
+#         cfg = yaml.load(ymlfile, yaml.SafeLoader)
+#     file_dep = glob.glob(os.path.join(os.path.join(basepath,cfg['paths']['zarrpath'],'*.zarr')))
+#     for file in file_dep:
+#         target =os.path.join(basepath,cfg['paths']['output'],'train','tiles',os.path.splitext(os.path.basename(file))[0])
+#         yield {
+#             'name':file,
+#             'actions':[(process_tiles, [],{'cfg':cfg})],
+#             'file_dep':[file],
+#             'targets':[target],
+#             'uptodate': [True],
+#             'clean':True,
+#         }  
          
 if __name__ == '__main__':
     import doit

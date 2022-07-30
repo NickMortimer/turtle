@@ -44,7 +44,11 @@ def getbase(files):
         if not os.path.exists(dest):
             print(item['path'])
             ftp.cwd(item['path'])
-            ftp.retrbinary("RETR " + item['file'], open(dest, 'wb').write)
+            try:
+                ftp.retrbinary("RETR " + item['file'], open(dest, 'wb').write)
+            except:
+                print(f"{item['file']} not found")
+                
     ftp.quit()
 
 
@@ -62,6 +66,7 @@ def task_calc_basefiles():
         os.makedirs(os.path.join(basepath,cfg['paths']['process']),exist_ok=True)
         os.makedirs(os.path.join(basepath,cfg['paths']['gnssceche']),exist_ok=True)
         file_dep =glob.glob(os.path.join(basepath,cfg['paths']['marksource']),recursive=True)
+        file_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
         target = os.path.join(basepath,cfg['paths']['process'],'basefiles.csv')
         return {
             'actions':[(calc_basefiles, [],{'cfg':cfg,'basepath':basepath})],
@@ -104,6 +109,7 @@ def task_unzip_base():
         crx2nxpath = os.path.join(basepath,cfg['paths']['rtklib'],'crx2rnx.exe')
         gnsspath = os.path.join(basepath,cfg['paths']['gnssceche'])
         file_dep = glob.glob(os.path.join(gnsspath,'*.gz'))
+        file_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
         zip = os.path.join(basepath,cfg['paths']['7zip'])
         for file in file_dep:
             yield {
@@ -153,6 +159,7 @@ def task_move_nav():
         for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource']),recursive=True):
             source = os.path.join(basepath,os.path.dirname(item))
             mark = glob.glob(os.path.join(source,'*Timestamp.MRK'))
+            mark = list(filter(lambda x:os.stat(x).st_size > 0,mark))
             if mark:
                 yield {
                     'name':mark[0],
@@ -164,7 +171,8 @@ def task_move_nav():
 
 def task_move_nav_files():
         def move_nav_files(dependencies, targets):
-            shutil.copy(dependencies[0],targets[0])
+            if os.path.exists(dependencies[0]):
+                shutil.copy(dependencies[0],targets[0])
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
@@ -176,15 +184,16 @@ def task_move_nav_files():
             files.file =files.file.str.replace('crx.gz','rnx')
             files.file =files.file.str.replace('rnx.gz','rnx')
             for index,row in files.iterrows():
-                sourcefile = os.path.join(sourcepath,row.file)                
-                destfile = os.path.join(destpath,row.file)
-                yield {
-                    'name':destfile,
-                    'actions':[move_nav_files],
-                    'file_dep':[sourcefile],
-                    'targets':[destfile],
-                    'clean':True,
-                } 
+                sourcefile = os.path.join(sourcepath,row.file)
+                if  os.path.exists(sourcefile):            
+                    destfile = os.path.join(destpath,row.file)
+                    yield {
+                        'name':destfile,
+                        'actions':[move_nav_files],
+                        'file_dep':[sourcefile],
+                        'targets':[destfile],
+                        'clean':True,
+                    } 
 
 def task_rtk():
         def process_rtk(dependencies, targets):
@@ -196,20 +205,22 @@ def task_rtk():
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
         file_dep =glob.glob(os.path.join(basepath,cfg['paths']['obssource']),recursive=True)
+        file_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
         exepath = f'{os.path.join(basepath,cfg["paths"]["rtklib"],"rnx2rtkp.exe")}'
         rtkconfig = os.path.join(basepath,cfg['paths']['rtkconfig'])
         for file in file_dep:
             base = os.path.join(os.path.dirname(file),'*_15M_01S_MO.rnx')
             nav = os.path.join(os.path.dirname(file),'*_01D_30S_MN.rnx')
-            if not os.path.exists(file.replace("obs","pos")):
-                yield {
-                    'name':file,
-                    'actions':[f'{exepath} -k {rtkconfig} -o {file.replace("obs","pos")} {file} {base} {nav} '],
-                    'file_dep':[file],
-                    'targets':[file.replace("obs","pos")],
-                    'uptodate':[True],
-                    'clean':True,
-                }          
+            if (len(glob.glob(base))>0) and (len(glob.glob(nav))>0):
+                if not os.path.exists(file.replace("obs","pos")):
+                    yield {
+                        'name':file,
+                        'actions':[f'{exepath} -k {rtkconfig} -o {file.replace("obs","pos")} {file} {base} {nav} '],
+                        'file_dep':[file],
+                        'targets':[file.replace("obs","pos")],
+                        'uptodate':[True],
+                        'clean':True,
+                    }          
 
 def task_calc_pic_pos():
         def process_pic_pos(dependencies, targets):
@@ -235,6 +246,8 @@ def task_calc_pic_pos():
                 'targets':[mark.replace('MRK','CSV')],
                 'clean':True,
             } 
+            
+            
         
 if __name__ == '__main__':
     import doit
