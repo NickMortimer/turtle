@@ -57,10 +57,10 @@ def task_make_area_list():
         
         
 def task_make_grids():
-    def process_grid(dependencies, targets,gridsize=25):
+    def process_grid(dependencies, targets,gridsize=10):
         area = gp.read_file(dependencies[0])
         utmcode = convert_wgs_to_utm(area.iloc[0].geometry.exterior.coords.xy[0][0],area.iloc[0].geometry.exterior.coords.xy[1][0])
-        crs = f'epsg:{utmcode}'
+        crs = f'epsg:{utmcode}' 
         polygon = area.to_crs(crs).iloc[0].geometry
         eastings =polygon.exterior.coords.xy[0]
         northings =polygon.exterior.coords.xy[1]
@@ -86,7 +86,7 @@ def task_make_grids():
         target = file.replace('_AOI.shp','_Grid.shp')
         yield {
             'name':target,
-            'actions':[process_grid],
+            'actions':[(process_grid,[],{'gridsize':int(cfg['survey']['gridsize'])})],
             'file_dep':[file],
             'targets':[target],
             'clean':True,

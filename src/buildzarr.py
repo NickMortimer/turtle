@@ -42,15 +42,15 @@ def task_make_zarr():
             return  ds
         
         
-        def process_row(item,points):
+        def process_row(item,points,tilesize):
             drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
                              (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree)
             img = xr.open_rasterio(item.FileDest) 
-            pixeldim=np.arange(-256,256)
+            pixeldim=np.arange(-(tilesize // 2),(tilesize //2))
             result =[]
             for point in points:
                 imx,imy=drone.realwordtocamera(point[0],point[1])
-                tile = cut_tile(item,point[0],point[1],img,int(imx),int(imy),pixeldim,item.ImageHeight,item.ImageWidth)
+                tile = cut_tile(item,point[0],point[1],img,int(imx),int(imy),pixeldim,item.ImageHeight,item.ImageWidth,tilesize)
                 if tile.variables:
                     #gcps = [rio.control.GroundControlPoint(row=0, col=0, x=100, y=1169) ]
                     #drone.jpegtoreal()
@@ -62,10 +62,13 @@ def task_make_zarr():
         surveyfile = list(filter(lambda x: '.csv' in x, dependencies))[0]
         gridfile = list(filter(lambda x: '.shp' in x, dependencies))[0]
         grid =gp.read_file(gridfile)
-        data = pd.read_csv(surveyfile,parse_dates=['TimeStamp']).iloc[0:50]
-        # sample = data.iloc[0:50]
-        # sample['idx'] =sample.index
-        # data = data[data.index.isin(np.hstack(sample.idx.apply(lambda x:range(x-2,x+3))))]
+        data = pd.read_csv(surveyfile,parse_dates=['TimeStamp'])
+        samples = int(cfg['survey']['sample'])
+        if samples>0:
+            sample = data.sample(samples)
+            sample['idx'] =sample.index
+            data = data[data.index.isin(np.hstack(sample.idx.apply(lambda x:range(x-2,x+3))))]
+        tilesize = int(cfg['survey']['tilesize'])
         n =data.NewName.str.split('_',expand=True)
         data['ImagePath']=cfg['paths']['output']+'/'+n[2]+'/'+data.SurveyId+'/'+data.NewName
         crs = f'epsg:{int(data["UtmCode"].min())}'
@@ -82,7 +85,7 @@ def task_make_zarr():
                     zarr.append(result)
             elif intersetion.geom_type=='MultiPoint':
                 points=[(p.x,p.y) for p in intersetion]
-                result=process_row(row,points)
+                result=process_row(row,points,tilesize)
                 zarr.append(result)
         output =list(filter(lambda x: x,zarr))
         if output:
@@ -92,6 +95,7 @@ def task_make_zarr():
             p =pd.DataFrame({'easting':output.easting,'northing':output.northing})
             p['gridpoint']=p.groupby(['easting','northing']).ngroup()
             output['gridpoint'] =(('tile'),(p['gridpoint']))
+            os.makedirs(target[0],exist_ok=True)
             output.to_zarr(targets[0])
 
             
@@ -139,7 +143,7 @@ def task_export_tiles():
             'actions':[(process_tiles, [],{'cfg':cfg})],
             'file_dep':[file],
             'targets':[target],
-            'uptodate': [check_timestamp_unchanged(target, 'ctime')],
+            'uptodate': [True],
             'clean':True,
         }  
 # from sklearn.cluster import SpectralClustering
