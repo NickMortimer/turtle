@@ -81,7 +81,7 @@ def task_make_zarr():
             intersetion = gridp.intersection(row.geometry.buffer(-10))
             if intersetion.geom_type=='Point':
                 if intersetion.coords:
-                    result=process_row(row,[(intersetion.x,intersetion.y)])
+                    result=process_row(row,[(intersetion.x,intersetion.y)],tilesize)
                     zarr.append(result)
             elif intersetion.geom_type=='MultiPoint':
                 points=[(p.x,p.y) for p in intersetion]
