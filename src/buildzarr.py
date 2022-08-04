@@ -125,12 +125,15 @@ def task_make_zarr():
 
 def task_export_tiles():
     def process_tiles(dependencies, targets,cfg):
-        tiles = xr.open_dataset(dependencies[0],engine='zarr')
-        tiles.image.attrs['nodatavals'] =[0,0,0]
-        tiles =tiles.rename({'dx':'x','dy':'y'})
-        os.makedirs(targets[0],exist_ok=True)
-        for index in range(0,len(tiles.image)):
-            tiles.image[index].rio.to_raster(os.path.join(targets[0],f'{os.path.basename(targets[0])}_Tile_{tiles.gridpoint[index].values:04d}_{tiles.imagenumber[index].values:03d}.JPG'), compress='zstd', zstd_level=1, num_threads='all_cpus', tiled=True, dtype='uint8', predictor=2)       
+        try:
+            tiles = xr.open_dataset(dependencies[0],engine='zarr')
+            tiles.image.attrs['nodatavals'] =[0,0,0]
+            tiles =tiles.rename({'dx':'x','dy':'y'})
+            os.makedirs(targets[0],exist_ok=True)
+            for index in range(0,len(tiles.image)):
+                tiles.image[index].rio.to_raster(os.path.join(targets[0],f'{os.path.basename(targets[0])}_Tile_{tiles.gridpoint[index].values:04d}_{tiles.imagenumber[index].values:03d}.JPG'), compress='zstd', zstd_level=1, num_threads='all_cpus', tiled=True, dtype='uint8', predictor=2)       
+        except:
+            print("No Zarr file")
     config = {"config": get_var('config', 'NO')}
     basepath = os.path.dirname(config['config'])
     with open(config['config'], 'r') as ymlfile:
