@@ -129,6 +129,7 @@ def task_plot_each_survey():
 def task_geopgk_survey():
     def process_geo(dependencies, targets):
         data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        data = data[['Latitude','Longitude','ImagePolygon','NewName','SurveyId','UtmCode']]
         if "UtmCode" in data.columns:
             crs = f'epsg:{int(data["UtmCode"][0])}'
             survey = data['SurveyId'][0]
@@ -142,41 +143,43 @@ def task_geopgk_survey():
     basepath = os.path.dirname(config['config'])
     file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey_data.csv'),recursive=True)
     for file in file_dep:
+        print(file)
         target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
         target = os.path.join(cfg['paths']['reports'],target)
         #countries_gdf
         yield {
-            'name':file,
+            'name':target,
             'actions':[process_geo],
             'file_dep':[file],
             'targets':[target],
             'uptodate': [True],
             'clean':True,
-        }  
+        } 
+
     
-def task_pdf_report():
-    def process_geo(dependencies, targets):
-        data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+# def task_pdf_report():
+#     def process_geo(dependencies, targets):
+#         data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
 
 
         
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey_data.csv'),recursive=True)
-    for file in file_dep:
-        target = os.path.splitext(os.path.basename(file))[0]+'.pdf'
-        target = os.path.join(cfg['paths']['reports'],target)
-        #countries_gdf
-        yield {
-            'name':file,
-            'actions':[process_geo],
-            'file_dep':[file],
-            'targets':[target],
-            'uptodate': [True],
-            'clean':True,
-        }  
+#     config = {"config": get_var('config', 'NO')}
+#     with open(config['config'], 'r') as ymlfile:
+#         cfg = yaml.load(ymlfile, yaml.SafeLoader)
+#     basepath = os.path.dirname(config['config'])
+#     file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey_data.csv'),recursive=True)
+#     for file in file_dep:
+#         target = os.path.splitext(os.path.basename(file))[0]+'.pdf'
+#         target = os.path.join(cfg['paths']['reports'],target)
+#         #countries_gdf
+#         yield {
+#             'name':file,
+#             'actions':[process_geo],
+#             'file_dep':[file],
+#             'targets':[target],
+#             'uptodate': [True],
+#             'clean':True,
+#         }  
         
 if __name__ == '__main__':
     import doit

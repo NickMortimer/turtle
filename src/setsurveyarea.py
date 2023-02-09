@@ -28,16 +28,16 @@ def task_detect_surveys():
             drone['Survey']=drone.index
             drone['Survey']=drone['Survey'].diff()>pd.Timedelta(timedelta)
             drone['Survey']=drone['Survey'].cumsum()+1
-            drone.to_csv(targets[1],index=True)
+            drone.to_csv(targets[1],index=True,escapechar='"')
             drone['StartTime'] =drone.index
             drone['EndTime'] =drone.index
             drone = drone[~drone.index.isna()]
-            starttime = drone.groupby('Survey').min()['StartTime']
-            endtime = drone.groupby('Survey').max()['EndTime']
-            count =   drone.groupby('Survey').count()['SourceFile'].rename('ImageCount')
-            position = drone.groupby('Survey').mean()[['Latitude','Longitude']]
+            starttime = drone.groupby('Survey')['StartTime'].min()
+            endtime = drone.groupby('Survey')['EndTime'].max()
+            count =   drone.groupby('Survey')['SourceFile'].count().rename('ImageCount')
+            position = drone.groupby('Survey')[['Latitude','Longitude']].mean()
             position =position.join([starttime,endtime,count])
-            position.to_csv(targets[0],index=True)
+            position.to_csv(targets[0],index=True,escapechar='"')
             
             
         config = {"config": get_var('config', 'NO')}
@@ -69,14 +69,18 @@ def task_assign_area():
             drone =pd.read_csv(surveyfile,index_col='TimeStamp',parse_dates=['TimeStamp'])
             pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
             pnts.Survey = pnts.Survey.astype('int')
-            areas =pd.read_csv(areafile)
-            areas = areas[areas.Type=='SurveyArea']
-            shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
-            pnts = sjoin(pnts, shapes, how='left')
-            pnts.loc[pnts.id.isna(),'id']=''
-            pnts =pnts.groupby('Survey').apply(setarea)
-            pnts.loc[pnts.id=='','id'] ='NOAREA'
-            
+            try:
+                areas =pd.read_csv(areafile)
+                areas = areas[areas.Type=='SurveyArea']
+                shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
+                pnts = sjoin(pnts, shapes, how='left')
+                pnts.loc[pnts.id.isna(),'id']=''
+                pnts =pnts.groupby('Survey').apply(setarea)
+            except:
+                print('no areas to use')
+                pnts['id']=''
+            finally:
+                pnts.loc[pnts.id=='','id'] ='NOAREA'
             pnts['SurveyId']=countrycode+'_'+pnts['id']+'_'+pnts[['ImageHeight','Survey']].groupby('Survey').transform(lambda x: x.index.min().strftime("%Y%m%dT%H%M"))['ImageHeight']
             
             
@@ -89,7 +93,7 @@ def task_assign_area():
                 # data.to_csv(filename,index=True)
             
             
-            pnts.to_csv(targets[0])
+            pnts.to_csv(targets[0],escapechar='"')
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
