@@ -138,6 +138,7 @@ def task_merge_xif():
             drone = pd.concat([pd.read_csv(file,index_col='TimeStamp',parse_dates=['TimeStamp']) 
                             for file in list(dependencies)]) 
             drone.sort_index(inplace=True)
+            drone =drone.drop_duplicates(subset= ['ImageTime','FileName'])
             drone.to_csv(list(targets)[0],index=True,escapechar='"')
             
         config = {"config": get_var('config', 'NO')}

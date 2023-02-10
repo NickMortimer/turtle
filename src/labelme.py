@@ -54,13 +54,14 @@ def loadshapes(file):
     print(file)
     lines =[]
     with open(file, "r") as read_file:
-        while read_file:
-            line =read_file.readline()
-            if "imagePath" in line:
-                break
-            lines.append(line)
-    lines[-1] ='  ]}\n'
-    data = json.loads(''.join(lines).replace("\n", "").replace("'", '"').replace('u"', '"'))
+        data = json.load(read_file)
+    #     while read_file:
+    #         line =read_file.readline()
+    #         if "imagePath" in line:
+    #             break
+    #         lines.append(line)
+    # lines[-1] ='  ]}\n'
+    #data = json.loads(''.join(lines).replace("\n", "").replace("'", '"').replace('u"', '"'))
     data =pd.DataFrame(data['shapes'])
     data['FilePath'] =file             
     return(data)
@@ -119,8 +120,8 @@ def task_process_matchup():
         source_file.index = source_file.NewName.apply(lambda x:os.path.splitext(x)[0])
         lableme.index = lableme.FilePath.apply(lambda x: os.path.splitext(os.path.basename(x))[0])
         output =lableme.join(source_file)
-        output.index.name='Key'
-        output.to_csv(targets[0])
+        output.index.name='Key'     
+        output[~output.UtmCode.isna()].to_csv(targets[0])
     config = {"config": get_var('config', 'NO')}
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
@@ -311,8 +312,13 @@ def task_calculate_positions():
             def calcRealworld(item):
                 #-14.772 hieght at Exmouth
                 localdrone = P4rtk(data,crs)
-                localdrone.setdronepos(item.Eastingrtk,item.Northingrtk,item.EllipsoideHight+14.772,
-                                  (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,-item.GimbalYawDegree+8) #item.GimbalPitchDegree-90,item.GimbalRollDegree,-item.GimbalYawDegree
+                if 'EllipsoideHight' in item:
+                    localdrone.setdronepos(item.Eastingrtk,item.Northingrtk,item.EllipsoideHight+14.772,
+                                    (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,-item.GimbalYawDegree+8) #item.GimbalPitchDegree-90,item.GimbalRollDegree,-item.GimbalYawDegree
+                else:
+                    localdrone.setdronepos(item.Easting,item.Northing,pd.to_numeric(item.GPSAltitude.split(' ')[0]),
+                                    (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,-item.GimbalYawDegree+8) #item.GimbalPitchDegree-90,item.GimbalRollDegree,-item.GimbalYawDegree
+                    
                 pos=localdrone.cameratorealworld(item.DewarpX,item.DewarpY)
                 item.EastingPntD = pos[0]
                 item.NorthingPntD = pos[1]
@@ -335,7 +341,8 @@ def task_calculate_positions():
             corrected =p4rtk.jpegtoreal(jpegpoints)
             drone[['DewarpX','DewarpY']] =corrected
             drone[['EastingPntJ','NorthingPntJ','EastingPntD','NorthingPntD']] = 0.
-            drone['EllipsoideHight']= pd.to_numeric(drone['EllipsoideHight'].str.split(',',expand=True)[0])
+            if 'EllipsoideHight' in drone.columns:
+                drone['EllipsoideHight']= pd.to_numeric(drone['EllipsoideHight'].str.split(',',expand=True)[0])
             drone = drone.apply(calcRealworld,axis=1)
             drone.to_csv(targets[0],index=False) 
 

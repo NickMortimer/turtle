@@ -85,12 +85,15 @@ def task_process_mergpos():
             if mrk_file:
                 mrk =read_mrk(mrk_file[0])
                 mrk['Easting'],mrk['Northing'] =utmproj(mrk['Longitude'].values,mrk['Latitude'].values)
+                mrk['EllipsoideHight'] = pd.to_numeric(mrk.EllipsoideHight.str.split(',',expand=True)[0])
+                mrk =mrk.add_suffix('Mrk')
                 drone =drone.join(mrk,rsuffix='Mrk')
             rtk_file=list(filter(lambda x: '_Timestamp.CSV' in x, dependencies))
             if rtk_file:
                 rtk =pd.read_csv(rtk_file[0],parse_dates=['GPST'],index_col=['Sequence'])
                 rtk['Easting'],rtk['Northing'] =utmproj(rtk['longitude(deg)'].values,rtk['latitude(deg)'].values)
-                drone =drone.join(rtk,rsuffix='rtk')
+                rtk =rtk.add_suffix('Rtk')
+                drone =drone.join(rtk,rsuffix='Rtk')
             drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
             drone = drone[pd.notna(drone.index)]
