@@ -1,6 +1,4 @@
-import pysftp
-
-
+from ftplib import FTP
 from os.path import supports_unicode_filenames
 import pandas as pd
 import numpy as np
@@ -28,29 +26,30 @@ def getbasenames(times,station,destination):
     starttime =times.floor('1H').min()-pd.Timedelta('1H')
     endtime = times.ceil('1H').max()+pd.Timedelta('1H')
     filerange = pd.date_range(starttime,endtime,freq='15MIN')
-    files =[{'TimeStamp':item,'path':f'/rinex/highrate/{item.year}/{item.day_of_year:03}/{item.hour:02}',
+    files =[{'TimeStamp':item,'path':f'/highrate/{item.year}/{item.day_of_year:03}/{item.hour:02}',
              'destination':destination,
              'file':f'{station}_S_{item.year}{item.day_of_year:03}{item.hour:02}{item.minute:02}_15M_01S_MO.crx.gz'} for item in filerange]
     for day in times.floor('1D').unique():
-        files.append({'path':f'/rinex/daily/{day.year}/{day.day_of_year:03}',
+        files.append({'path':f'/daily/{day.year}/{day.day_of_year:03}',
                        'destination':destination,
-                       'file':f'{station}_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz'})
+                       'file':f'{station}_R_{day.year}{day.day_of_year:03}0000_01D_30S_MN.rnx.gz'})
     return pd.DataFrame(files)
 
-def getbase(files,cfg):
-    with pysftp.Connection('sftp.data.gnss.ga.gov.au', username='anonymous', password=cfg['user']['email']) as sftp:
-        for item in files:
-            dest = os.path.join(item['destination'],item['file'])
-            print(dest)
-            if not os.path.exists(dest):
-                print(item['path'])
-                sftp.cwd(item['path'])
-                try:
-                    sftp.get( item['file'], dest)
-                except:
-                    print(f"{item['file']} not found")
-                    
-
+def getbase(files):
+    ftp = FTP('ftp.data.gnss.ga.gov.au')
+    ftp.login()
+    for item in files:
+        dest = os.path.join(item['destination'],item['file'])
+        print(dest)
+        if not os.path.exists(dest):
+            print(item['path'])
+            ftp.cwd(item['path'])
+            try:
+                ftp.retrbinary("RETR " + item['file'], open(dest, 'wb').write)
+            except:
+                print(f"{item['file']} not found")
+                
+    ftp.quit()
 
 
 def task_calc_basefiles():
@@ -82,16 +81,16 @@ def task_calc_basefiles():
              
         
 def task_get_basefiles():
-        def calc_basefiles(dependencies, targets,basepath,cfg):
+        def calc_basefiles(dependencies, targets,basepath):
             basefiles = pd.read_csv(dependencies[0])
-            getbase(basefiles.to_dict('records'),cfg)
+            getbase(basefiles.to_dict('records'))
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
         file_dep = os.path.join(basepath,cfg['paths']['process'],'basefiles.csv')
         return {
-            'actions':[(calc_basefiles, [],{'basepath':basepath,'cfg':cfg,'basepath':basepath})],
+            'actions':[(calc_basefiles, [],{'basepath':basepath})],
             'file_dep':[file_dep],
             'uptodate':[True],
             'clean':True,
@@ -172,7 +171,7 @@ def task_move_nav():
 
 def task_move_nav_files():
         def move_nav_files(dependencies, targets):
-            if os.path.exists(dependencies[0]) & ~os.path.exists(targets[0]):
+            if os.path.exists(dependencies[0]):
                 shutil.copy(dependencies[0],targets[0])
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
@@ -182,8 +181,8 @@ def task_move_nav_files():
             sourcepath = os.path.join(basepath,cfg['paths']['gnssceche'])
             destpath = os.path.join(basepath,os.path.dirname(item))
             files = pd.read_csv(item)
-            files.file =files.file.str.replace('crx.gz','rnx',regex=False)
-            files.file =files.file.str.replace('rnx.gz','rnx',regex=False)
+            files.file =files.file.str.replace('crx.gz','rnx')
+            files.file =files.file.str.replace('rnx.gz','rnx')
             for index,row in files.iterrows():
                 sourcefile = os.path.join(sourcepath,row.file)
                 if  os.path.exists(sourcefile):            
@@ -211,7 +210,7 @@ def task_rtk():
         rtkconfig = os.path.join(basepath,cfg['paths']['rtkconfig'])
         for file in file_dep:
             base = os.path.join(os.path.dirname(file),'*_15M_01S_MO.rnx')
-            nav = os.path.join(os.path.dirname(file),'*_01D_MN.rnx')
+            nav = os.path.join(os.path.dirname(file),'*_01D_30S_MN.rnx')
             if (len(glob.glob(base))>0) and (len(glob.glob(nav))>0):
                 if not os.path.exists(file.replace("obs","pos")):
                     yield {
