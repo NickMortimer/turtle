@@ -14,7 +14,7 @@ import plotly.express as px
 import geopandas as gp
 import shapely.wkt
 from shapely.geometry import MultiPoint
-
+from jinja2 import Environment, FileSystemLoader
 
 
 # config = {"config": get_var('config', 'NO')}
@@ -57,7 +57,8 @@ def task_check_survey():
             'targets':[target],
             'uptodate': [True],
             'clean':True,
-        } 
+
+       } 
                 
   
             
@@ -157,6 +158,17 @@ def task_geopgk_survey():
 def task_pdf_report():
     def process_geo(dependencies, targets):
         data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        env = Environment(loader=FileSystemLoader('templates'))
+        template = env.get_template('../templates/report.html')
+        html = template.render(page_title_text='My report',
+                            title_text='Daily S&P 500 prices report',
+                            text ='Hello, welcome to your report!',
+                            prices_text='Historical prices of S&P 500',
+                            stats_text='Historical prices summary statistics',
+                            sp500_history=0,
+                            sp500_history_summary=0)
+        with open('html_report_jinja.html', 'w') as f:
+            f.write(html)        
 
 
         

@@ -100,7 +100,7 @@ def task_images_dest():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
+        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'))
         for file in file_dep:
             country = os.path.basename(file).split('_')[0]
             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])

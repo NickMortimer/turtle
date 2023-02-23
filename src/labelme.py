@@ -2,7 +2,6 @@ from genericpath import exists
 import os
 import glob
 import shutil
-from tkinter import E
 import doit
 import glob
 import os
@@ -52,6 +51,7 @@ from PIL import Image
             
 #         }
 def loadshapes(file):
+    print(file)
     lines =[]
     with open(file, "r") as read_file:
         data = json.load(read_file)
@@ -95,6 +95,7 @@ def task_process_labelme():
         
 def task_process_mergelabel():
         def process_mergelabel(dependencies, targets):
+            os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
             files = list(filter(lambda x:os.path.getsize(x)>10, dependencies))
             data = pd.concat([pd.read_csv(file) for file in files])
             data.to_csv(targets[0],index=False)       
@@ -103,7 +104,7 @@ def task_process_mergelabel():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['labelmesource'],'labelme.csv'),recursive=True)
+        file_dep = glob.glob(os.path.join(cfg['paths']['labelmesource'],'labelme.csv'),recursive=True)
         target = os.path.join(basepath,cfg['paths']['process'],'mergelabelme.csv')        
         return {
             'actions':[process_mergelabel],
@@ -114,7 +115,7 @@ def task_process_mergelabel():
         
 def task_process_matchup():
     def process_labelmatch(dependencies, targets):
-        source_file = pd.concat([pd.read_csv(file) for file in filter(lambda x: '_survey.csv' in x, dependencies)])
+        source_file = pd.concat([pd.read_csv(file) for file in filter(lambda x: '_survey_data.csv' in x, dependencies)])
         lableme = pd.concat([pd.read_csv(file) for file in filter(lambda x: 'mergelabelme' in x, dependencies)])
         source_file.index = source_file.NewName.apply(lambda x:os.path.splitext(x)[0])
         lableme.index = lableme.FilePath.apply(lambda x: os.path.splitext(os.path.basename(x))[0])
@@ -125,7 +126,7 @@ def task_process_matchup():
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
-    file_dep =  glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'),recursive=True)
+    file_dep =  glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**/*_survey_data.csv'),recursive=True)
     file_dep.append(os.path.join(basepath,cfg['paths']['process'],'mergelabelme.csv'))
     
     
