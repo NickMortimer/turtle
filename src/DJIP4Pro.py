@@ -81,7 +81,7 @@ def task_process_mergpos():
             drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
             drone = drone[pd.notna(drone.index)]
-            drone.to_csv(list(targets)[0],index=True,escapechar='"')
+            drone.to_csv(list(targets)[0],index=True)
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
@@ -112,7 +112,7 @@ def task_addpolygons():
         gdf = gp.GeoDataFrame(data, geometry=gp.points_from_xy(data.Easting, data.Northing),crs=crs)
         drone =P4rtk(dewarp,crs)
         gdf['ImagePolygon'] = gdf.apply(getpoly,axis=1)
-        gdf.to_csv(targets[0],escapechar='"')
+        gdf.to_csv(targets[0])
         
         
         
@@ -139,7 +139,7 @@ def task_merge_xif():
                             for file in list(dependencies)]) 
             drone.sort_index(inplace=True)
             drone =drone.drop_duplicates(subset= ['ImageTime','FileName'])
-            drone.to_csv(list(targets)[0],index=True,escapechar='"')
+            drone.to_csv(list(targets)[0],index=True)
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:

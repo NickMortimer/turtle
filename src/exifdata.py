@@ -33,18 +33,15 @@ def task_create_json():
         basepath = os.path.dirname(config['config'])
         exifpath = os.path.join(basepath,cfg['paths']['exiftool'])
         for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource']),recursive=True):
-            filter = None
-            if glob.glob(os.path.join(item,cfg['paths']['imagewild'].upper())):
-                filter = os.path.join(item,cfg['paths']['imagewild'])
-            elif glob.glob(os.path.join(item,cfg['paths']['imagewild'].lower())):
-                filter = os.path.join(item,cfg['paths']['imagewild'].lower())
-            if filter:
-                target  = os.path.join(item,'exif.json')
+            source = os.path.join(basepath,os.path.dirname(item))
+            if glob.glob(os.path.join(source,cfg['paths']['imagewild'].upper())) or glob.glob(cfg['paths']['imagewild'].lower()):
+                target  = os.path.join(source,'exif.json')
+                filter = os.path.join(source,cfg['paths']['imagewild'])
                 file_dep = glob.glob(filter)
                 if file_dep:
-                    yield { 
+                    yield {
                         'name':item,
-                        'actions':[f'exiftool -json {filter} > {target}'],
+                        'actions':[f'"{exifpath}" -json "{filter}" > "{target}"'],
                         'targets':[target],
                         'uptodate':[True],
 #                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
@@ -74,15 +71,13 @@ def task_process_json():
                     drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
                 drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d+)\.(jpg|JPG)')['Sequence']
                 drone.set_index('Sequence',inplace=True)
-                drone.to_csv(list(targets)[0],index=True,escapechar='"')
+                drone.to_csv(list(targets)[0],index=True)
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        files = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'**/exif.json'),recursive=True)
-        files = [*set(files)]
-        for item in files:
+        for item in glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'exif.json'),recursive=True):
             source = os.path.join(basepath,os.path.dirname(item))
             file_dep  =  item
             target =   os.path.join(source,'exif.csv')           

@@ -33,7 +33,7 @@ def task_make_surveys():
                 data['Extension']=data['SourceFile'].apply(lambda x: os.path.splitext(x)[1]).str.upper()
                 data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
                 filename = os.path.join(basepath,cfg['paths']['process'],f"{data['SurveyId'].min()}_survey.csv")                
-                data.to_csv(filename,index=True,escapechar='"')
+                data.to_csv(filename,index=True)
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
@@ -67,7 +67,7 @@ def task_calculate_survey_areas():
         gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
         gdf['ImagePolygon'] = data.ImagePolygon.apply(shapely.wkt.loads)
         gdf['SurveyAreaHec'] = survey_area(gdf)/10000
-        gdf.to_csv(targets[0],index=True,escapechar='"')
+        gdf.to_csv(targets[0],index=True)
         
     config = {"config": get_var('config', 'NO')}
     with open(config['config'], 'r') as ymlfile:
@@ -92,7 +92,7 @@ def task_images_dest():
             survey = pd.read_csv(dependencies[0])
             os.makedirs(destination,exist_ok=True)
             survey['FileDest'] = survey['NewName'].apply(lambda x: os.path.join(destination,x))
-            survey.to_csv(targets[0],index=False,escapechar='"')
+            survey.to_csv(targets[0],index=False)
           
             
             
@@ -100,7 +100,7 @@ def task_images_dest():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
+        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'))
         for file in file_dep:
             country = os.path.basename(file).split('_')[0]
             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
@@ -124,8 +124,7 @@ def task_file_images():
             for index,row in survey.iterrows():
                 if not os.path.exists(row.FileDest):
                     #os.symlink(row.SourceFile, row.FileDest)
-                    if os.path.exists(row.SourceFile):
-                        shutil.copyfile(row.SourceFile,row.FileDest)
+                    shutil.copyfile(row.SourceFile,row.FileDest)
             shutil.copyfile(dependencies[0],targets[0])
             
             

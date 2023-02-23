@@ -97,14 +97,14 @@ def task_process_mergpos():
             drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
             drone = drone[pd.notna(drone.index)]
-            drone.to_csv(list(targets)[0],index=True,escapechar='"')
+            drone.to_csv(list(targets)[0],index=True)
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        bl                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+        basepath = os.path.dirname(config['config'])
         for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource']),recursive=True):
-            source = item #os.path.join(basepath,os.path.dirname(item))
+            source = os.path.join(basepath,os.path.dirname(item))
             file_dep  =  list(filter(lambda x:  any(f in x for f in ['exif.csv','Timestamp']), glob.glob(os.path.join(source,'*.*'))))
             fild_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
             if file_dep:
@@ -154,14 +154,13 @@ def task_merge_xif():
             drone = pd.concat([pd.read_csv(file,index_col='TimeStamp',parse_dates=['TimeStamp']) 
                             for file in list(dependencies)]) 
             drone.sort_index(inplace=True)
-            drone = drone[~drone.index.duplicated(keep='first')]
             drone.to_csv(list(targets)[0],index=True)
             
         config = {"config": get_var('config', 'NO')}
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'**/polygons.csv')
+        searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'polygons.csv')
         file_dep = glob.glob(searchpath,recursive=True)
         processpath =os.path.join(basepath,cfg['paths']['process'])
         os.makedirs(processpath,exist_ok=True)
