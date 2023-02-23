@@ -342,7 +342,7 @@ def task_calculate_positions():
             drone[['DewarpX','DewarpY']] =corrected
             drone[['EastingPntJ','NorthingPntJ','EastingPntD','NorthingPntD']] = 0.
             if 'EllipsoideHight' in drone.columns:
-                drone['EllipsoideHight']= pd.to_numeric(drone['EllipsoideHight'].str.split(',',expand=True)[0])
+                drone.loc[~drone['EllipsoideHight'].isna(),'EllipsoideHight']= pd.to_numeric(drone.loc[~drone['EllipsoideHight'].isna(),'EllipsoideHight'].str.split(',',expand=True)[0])
             drone = drone.apply(calcRealworld,axis=1)
             drone.to_csv(targets[0],index=False) 
 
