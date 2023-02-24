@@ -100,11 +100,11 @@ def task_images_dest():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'))
+        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
         for file in file_dep:
             country = os.path.basename(file).split('_')[0]
             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
-            target = file.replace('_survey_area','_survey_data')
+            target = file.replace('_survey_area','_survey_area_data')
             dest = os.path.join(cfg['paths']['output'],country,sitecode)
             yield {
                 'name':file,
@@ -133,7 +133,7 @@ def task_file_images():
         with open(config['config'], 'r') as ymlfile:
             cfg = yaml.load(ymlfile, yaml.SafeLoader)
         basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'))
+        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area_data.csv'))
         for file in file_dep:
             country = os.path.basename(file).split('_')[0]
             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])

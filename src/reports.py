@@ -155,8 +155,8 @@ def task_geopgk_survey():
             'clean':True,
         }  
     
-def task_pdf_report():
-    def process_geo(dependencies, targets):
+def task_html_report():
+    def process_report(dependencies, targets):
         data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
         env = Environment(loader=FileSystemLoader('templates'))
         template = env.get_template('../templates/report.html')
@@ -183,7 +183,7 @@ def task_pdf_report():
         #countries_gdf
         yield {
             'name':file,
-            'actions':[process_geo],
+            'actions':[process_report],
             'file_dep':[file],
             'targets':[target],
             'uptodate': [True],
