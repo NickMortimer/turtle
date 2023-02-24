@@ -94,6 +94,7 @@ def task_plot_surveys():
         fig = px.scatter_mapbox(drone, hover_name='SurveyId', lat="Latitude", lon="Longitude",  
                                 mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=10)
         fig.update_layout(mapbox_style="satellite-streets")
+        os.makedirs(os.path.dirname(list(targets)[0]),exist_ok=True)
         plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
         
     file_dep = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
@@ -158,16 +159,11 @@ def task_geopgk_survey():
 def task_html_report():
     def process_report(dependencies, targets):
         data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-        env = Environment(loader=FileSystemLoader('templates'))
-        template = env.get_template('../templates/report.html')
-        html = template.render(page_title_text='My report',
-                            title_text='Daily S&P 500 prices report',
-                            text ='Hello, welcome to your report!',
-                            prices_text='Historical prices of S&P 500',
-                            stats_text='Historical prices summary statistics',
-                            sp500_history=0,
-                            sp500_history_summary=0)
-        with open('html_report_jinja.html', 'w') as f:
+        env = Environment(loader=FileSystemLoader(os.path.join(Path(os.path.abspath(__file__)).parent.parent,'templates')))
+        template = env.get_template('report.html')
+        html = template.render(surveyname=data.SurveyId.min(),
+                            surveyinfo=data)
+        with open(targets[0], 'w') as f:
             f.write(html)        
 
 
@@ -176,7 +172,7 @@ def task_html_report():
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey_data.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey_area_data.csv'),recursive=True)
     for file in file_dep:
         target = os.path.splitext(os.path.basename(file))[0]+'.pdf'
         target = os.path.join(cfg['paths']['reports'],target)
