@@ -18,34 +18,32 @@ import shutil
 import shapely.wkt
 from shapely.geometry import MultiPoint
 from geopandas.tools import sjoin
+import config
+
 
 
 
  
       
 def task_make_surveys():
-        def process_surveys(dependencies, targets,cfg):
+        def process_surveys(dependencies, targets):
             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
             for name,data in drone.groupby('Survey'):
                 data['Counter'] = 1
                 data['Counter'] = data['Counter'].cumsum()
                 #data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
                 data['Extension']=data['SourceFile'].apply(lambda x: os.path.splitext(x)[1]).str.upper()
-                data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
-                filename = os.path.join(basepath,cfg['paths']['process'],f"{data['SurveyId'].min()}_survey.csv")                
+                data['NewName']=data.apply(lambda item: f"{config.cfg['survey']['dronetype']}_{config.cfg['survey']['cameratype']}_{config.cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
+                filename = os.path.join(config.basepath,config.cfg['paths']['process'],f"{data['SurveyId'].min()}_survey.csv")                
                 data.to_csv(filename,index=True)
             
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
+        file_dep = os.path.join(config.basepath,config.cfg['paths']['process'],'surveyswitharea.csv')
         if os.path.exists(file_dep):
             surveys =pd.read_csv(file_dep,index_col='TimeStamp',parse_dates=['TimeStamp']).groupby('Survey')
-            targets = [os.path.join(basepath,cfg['paths']['process'],
-                                    f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv') for name,data in surveys]
+            targets = [os.path.join(config.basepath,config.cfg['paths']['process'],
+                                    f'{config.cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv') for name,data in surveys]
             return {
-                'actions':[(process_surveys,[],{'cfg':cfg})],
+                'actions':[(process_surveys,[])],
                 'file_dep':[file_dep],
                 'targets':targets,
                 'clean':True,
@@ -69,11 +67,8 @@ def task_calculate_survey_areas():
         gdf['SurveyAreaHec'] = survey_area(gdf)/10000
         gdf.to_csv(targets[0],index=True)
         
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey.csv'),recursive=True)
+
+    file_dep = glob.glob(os.path.join(config.basepath,config.cfg['paths']['process'],'*_survey.csv'),recursive=True)
     for file in file_dep:
         target = file.replace('_survey','_survey_area')
         yield {
@@ -93,19 +88,13 @@ def task_images_dest():
             os.makedirs(destination,exist_ok=True)
             survey['FileDest'] = survey['NewName'].apply(lambda x: os.path.join(destination,x))
             survey.to_csv(targets[0],index=False)
-          
-            
-            
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area.csv'))
+
+        file_dep = glob.glob(os.path.join(config.basepath,config.cfg['paths']['process'],'*_survey_area.csv'))
         for file in file_dep:
             country = os.path.basename(file).split('_')[0]
             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
             target = file.replace('_survey_area','_survey_area_data')
-            dest = os.path.join(cfg['paths']['output'],country,sitecode)
+            dest = os.path.join(config.cfg['paths']['output'],country,sitecode)
             yield {
                 'name':file,
                 'actions':[(process_images, [],{'destination':dest})],
@@ -127,17 +116,12 @@ def task_file_images():
                     shutil.copyfile(row.SourceFile,row.FileDest)
             shutil.copyfile(dependencies[0],targets[0])
             
-            
-            
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area_data.csv'))
+
+        file_dep = glob.glob(os.path.join(config.basepath,config.cfg['paths']['process'],'*_survey_area_data.csv'))
         for file in file_dep:
             country = os.path.basename(file).split('_')[0]
             sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
-            dest = os.path.join(cfg['paths']['output'],country,sitecode)
+            dest = os.path.join(config.cfg['paths']['output'],country,sitecode)
             target = os.path.join(dest,os.path.basename(file))
             os.path.dirname
             yield {

@@ -15,6 +15,7 @@ import geopandas as gp
 import shapely.wkt
 from shapely.geometry import MultiPoint
 from jinja2 import Environment, FileSystemLoader
+from pathlib import Path
 
 
 # config = {"config": get_var('config', 'NO')}
@@ -47,9 +48,9 @@ def task_check_survey():
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area_data.csv'),recursive=True)
     for file in file_dep:
-        target = file.replace('_survey_data.csv','_survey_summary.csv')
+        target = file.replace('_survey_area_data.csv','_survey_area_data_summary.csv')
         yield {
             'name':file,
             'actions':[process_check_survey],
@@ -78,7 +79,7 @@ def task_concat_check_survey():
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_summary.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area_data_summary.csv'),recursive=True)
     target = os.path.join(cfg['paths']['reports'],'image_coverage.csv')
     return {
         'actions':[process_concat_check_survey],
@@ -91,19 +92,25 @@ def task_plot_surveys():
     def process_survey(dependencies, targets,apikey):
         drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
         px.set_mapbox_access_token(apikey)
+        max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
+        zoom = 11.5 - np.log(max_bound)
         fig = px.scatter_mapbox(drone, hover_name='SurveyId', lat="Latitude", lon="Longitude",  
-                                mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=10)
+                                mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=zoom)
         fig.update_layout(mapbox_style="satellite-streets")
-        os.makedirs(os.path.dirname(list(targets)[0]),exist_ok=True)
-        plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
-        
+        os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
+        html_file =list(filter(lambda x: 'html' in x, targets))[0]
+        png_file =list(filter(lambda x: 'png' in x, targets))[0]
+        plotly.offline.plot(fig, filename=html_file)
+        fig.write_image(png_file)
     file_dep = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
-    targets = os.path.join(basepath,cfg['paths']['reports'],'surveys.html')
+    targets = [os.path.join(basepath,cfg['paths']['reports'],'surveys.html'),
+               os.path.join(basepath,cfg['paths']['reports'],'surveys.png')]
+               
     return {
 
         'actions':[(process_survey, [],{'apikey':cfg['mapboxkey']})],
         'file_dep':[file_dep],
-        'targets':[targets],
+        'targets':targets,
         'clean':True,
     }  
     
@@ -111,10 +118,16 @@ def task_plot_each_survey():
     def process_survey(dependencies, targets,apikey):
         drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
         px.set_mapbox_access_token(apikey)
+        max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
+        zoom = 13.5 - np.log(max_bound)
         fig = px.scatter_mapbox(drone, hover_name='NewName', lat="Latitude", lon="Longitude",  
-                                mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=15)
-        fig.update_layout(mapbox_style="satellite-streets")
-        plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
+                                mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=zoom)        
+        fig.update_layout(mapbox_style="satellite-streets",autosize=False)
+        html_file =list(filter(lambda x: 'html' in x, targets))[0]
+        png_file =list(filter(lambda x: 'png' in x, targets))[0]
+        plotly.offline.plot(fig, filename=html_file,auto_open = False)
+        fig.update_layout(coloraxis_showscale=False,showlegend=False,autosize=False,margin = dict(t=10, l=10, r=10, b=10))
+        fig.write_image(png_file)
         
         
     file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'))
@@ -124,7 +137,7 @@ def task_plot_each_survey():
             'name':target,
             'actions':[(process_survey, [],{'apikey':cfg['mapboxkey']})],
             'file_dep':[inputfile],
-            'targets':[target],
+            'targets':[target,target.replace('html','png')],
             'clean':True,
         }        
     
@@ -142,7 +155,7 @@ def task_geopgk_survey():
     with open(config['config'], 'r') as ymlfile:
         cfg = yaml.load(ymlfile, yaml.SafeLoader)
     basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey_data.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey_area_data.csv'),recursive=True)
     for file in file_dep:
         target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
         target = os.path.join(cfg['paths']['reports'],target)

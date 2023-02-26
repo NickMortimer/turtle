@@ -18,6 +18,7 @@ import shutil
 import shapely.wkt
 from shapely.geometry import MultiPoint
 from geopandas.tools import sjoin
+import config
 
 def task_detect_surveys():
         def process_survey(dependencies, targets,timedelta,maxpitch):
@@ -25,6 +26,8 @@ def task_detect_surveys():
             #drone = drone[drone.GimbalPitchDegree<maxpitch].copy()
             os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
             drone.sort_index(inplace=True)
+            #remove duplicated time stamps
+            drone = drone[~drone.index.duplicated()]
             drone['Survey']=drone.index
             drone['Survey']=drone['Survey'].diff()>pd.Timedelta(timedelta)
             drone['Survey']=drone['Survey'].cumsum()+1
@@ -32,8 +35,8 @@ def task_detect_surveys():
             drone['StartTime'] =drone.index
             drone['EndTime'] =drone.index
             drone = drone[~drone.index.isna()]
-            starttime = drone.groupby('Survey').min()['StartTime']
-            endtime = drone.groupby('Survey').max()['EndTime']
+            starttime = drone.groupby('Survey')['StartTime'].min()
+            endtime = drone.groupby('Survey')['EndTime'].max()
             count =   drone.groupby('Survey').count()['SourceFile'].rename('ImageCount')
             position = drone.groupby('Survey').mean()[['Latitude','Longitude']]
             position =position.join([starttime,endtime,count])
@@ -69,14 +72,18 @@ def task_assign_area():
             drone =pd.read_csv(surveyfile,index_col='TimeStamp',parse_dates=['TimeStamp'])
             pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
             pnts.Survey = pnts.Survey.astype('int')
-            areas =pd.read_csv(areafile)
-            areas = areas[areas.Type=='SurveyArea']
-            shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
-            pnts = sjoin(pnts, shapes, how='left')
-            pnts.loc[pnts.id.isna(),'id']=''
-            pnts =pnts.groupby('Survey').apply(setarea)
-            pnts.loc[pnts.id=='','id'] ='NOAREA'
-            
+            try:
+                areas =pd.read_csv(areafile)
+                areas = areas[areas.Type=='SurveyArea']
+                shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
+                pnts = sjoin(pnts, shapes, how='left')
+                pnts.loc[pnts.id.isna(),'id']=''
+                pnts =pnts.groupby('Survey').apply(setarea)
+                pnts.loc[pnts.id=='','id'] ='NOAREA'
+            except:
+                pnts = drone
+                pnts['id'] ='NOAREA'
+                          
             pnts['SurveyId']=countrycode+'_'+pnts['id']+'_'+pnts[['ImageHeight','Survey']].groupby('Survey').transform(lambda x: x.index.min().strftime("%Y%m%dT%H%M"))['ImageHeight']
             
             
@@ -109,4 +116,5 @@ if __name__ == '__main__':
     import doit
     DOIT_CONFIG = {'check_file_uptodate': 'timestamp'}
     #print(globals())
+    config.readconfig()
     doit.run(globals())   
