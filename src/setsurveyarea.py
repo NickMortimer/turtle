@@ -20,6 +20,9 @@ from shapely.geometry import MultiPoint
 from geopandas.tools import sjoin
 import config
 
+def task_set_up():
+    config.read_config()
+    
 def task_detect_surveys():
         def process_survey(dependencies, targets,timedelta,maxpitch):
             drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
@@ -42,15 +45,10 @@ def task_detect_surveys():
             position =position.join([starttime,endtime,count])
             position.to_csv(targets[0],index=True)
             
-            
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = os.path.join(basepath,cfg['paths']['process'],'imagedata.csv')
-        targets = (os.path.join(basepath,cfg['paths']['process'],'surveysummary.csv'),os.path.join(basepath,cfg['paths']['process'],'surveys.csv'))
+        file_dep = os.path.join(config.basepath,config.cfg['paths']['process'],'imagedata.csv')
+        targets = (os.path.join(config.basepath,config.cfg['paths']['process'],'surveysummary.csv'),os.path.join(config.basepath,config.cfg['paths']['process'],'surveys.csv'))
         return {
-            'actions':[(process_survey, [],{'timedelta':cfg['survey']['timedelta'],'maxpitch':cfg['survey']['maxpitch']})],
+            'actions':[(process_survey, [],{'timedelta':config.cfg['survey']['timedelta'],'maxpitch':config.cfg['survey']['maxpitch']})],
             'file_dep':[file_dep],
             'targets':targets,
             'clean':True,
@@ -98,15 +96,12 @@ def task_assign_area():
             
             pnts.to_csv(targets[0])
             
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = [os.path.join(basepath,cfg['paths']['process'],'surveys.csv'),
-                    os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv')]
-        target = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
+
+        file_dep = [os.path.join(config.basepath,config.cfg['paths']['process'],'surveys.csv'),
+                    os.path.join(config.basepath,config.cfg['paths']['process'],'surveyareas.csv')]
+        target = os.path.join(config.basepath,config.cfg['paths']['process'],'surveyswitharea.csv')
         return {
-            'actions':[(process_assign_area,[],{'countrycode':cfg["survey"]["country"]})],
+            'actions':[(process_assign_area,[],{'countrycode':config.cfg["survey"]["country"]})],
             'file_dep':file_dep,
             'targets':[target],
             'clean':True,
@@ -116,5 +111,4 @@ if __name__ == '__main__':
     import doit
     DOIT_CONFIG = {'check_file_uptodate': 'timestamp'}
     #print(globals())
-    config.readconfig()
     doit.run(globals())   

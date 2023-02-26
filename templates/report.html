@@ -1,10 +1,49 @@
 <html>
     <head>
-        <title>{{surveyname}}</title>
+        <title>{{SurveyId}}</title>
     </head>
     <body>
-            <h1>Drone Information</h1>
-            {{surveyinfo.to_html()}}
-            <img src='chart.png' width="700">
+            <h1>Survey Information</h1>
+            <table border="1" class="dataframe">
+                <thead>
+                  <tr>
+                    <th>SurveyId</th>
+                    <th>{{SurveyId}}</th>
+                  </tr>
+                  <tr>
+                    <th>StartTime</th>
+                    <th>{{StartTime}}</th>
+                  </tr>
+                  <tr>
+                    <th>EndTime</th>
+                    <th>{{EndTime}}</th>
+                  </tr>
+                  <tr>
+                    <th>Mean Latitude</th>
+                    <th>{{Latitude}}</th>
+                  </tr>
+                  <tr>
+                    <th>Mean Longitude</th>
+                    <th>{{Longitude}}</th>
+                  </tr>
+                  <tr>
+                    <th>Coverage %</th>
+                    <th>{{Coverage}}</th>
+                  </tr>
+                  <tr>
+                    <th>Expected No. Of Images</th>
+                    <th>{{Expected}}</th>
+                  </tr>
+                  <tr>
+                    <th>Survey Area (h)</th>
+                    <th>{{Area}}</th>
+                  </tr>
+                  <tr>
+                    <th>Missing Images</th>
+                    <th>{{Missing}}</th>
+                  </tr>                  
+                </tbody>
+              </table>
+            <img src='{{map}}' width="700">
     </body>
 </html>

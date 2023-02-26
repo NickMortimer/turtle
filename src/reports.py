@@ -16,6 +16,7 @@ import shapely.wkt
 from shapely.geometry import MultiPoint
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
+import config
 
 
 # config = {"config": get_var('config', 'NO')}
@@ -23,12 +24,11 @@ from pathlib import Path
 #     cfg = yaml.load(ymlfile, yaml.SafeLoader)
 # basepath = os.path.dirname(config['config'])
 
-
+def task_set_up():
+    config.read_config()
          
    
-def task_check_survey():
-    global cfg
-    global basepath    
+def task_check_survey():  
     def process_check_survey(dependencies, targets):
         drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
         images = pd.DataFrame(glob.glob(os.path.join(os.path.dirname(drone['FileDest'].min()),'*.JPG')),
@@ -44,11 +44,8 @@ def task_check_survey():
                         'Coverage':coverage,'Expected':expected,
                         'Area':d.SurveyAreaHec.mean(),
                         'Missing':missing}]).to_csv(targets[0],index=False)
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area_data.csv'),recursive=True)
+
+    file_dep = glob.glob(os.path.join(config.basepath,config.cfg['paths']['process'],'*_survey_area_data.csv'),recursive=True)
     for file in file_dep:
         target = file.replace('_survey_area_data.csv','_survey_area_data_summary.csv')
         yield {
@@ -75,12 +72,8 @@ def task_concat_check_survey():
         surveys =surveys.set_index('SurveyId').sort_index()
         surveys.to_csv(targets[0])
         
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_area_data_summary.csv'),recursive=True)
-    target = os.path.join(cfg['paths']['reports'],'image_coverage.csv')
+    file_dep = glob.glob(os.path.join(config.basepath,config.cfg['paths']['process'],'*_survey_area_data_summary.csv'),recursive=True)
+    target = os.path.join(config.cfg['paths']['reports'],'image_coverage.csv')
     return {
         'actions':[process_concat_check_survey],
         'file_dep':file_dep,
@@ -91,6 +84,7 @@ def task_concat_check_survey():
 def task_plot_surveys():
     def process_survey(dependencies, targets,apikey):
         drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        drone = drone[drone.Longitude>0]
         px.set_mapbox_access_token(apikey)
         max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
         zoom = 11.5 - np.log(max_bound)
@@ -100,15 +94,15 @@ def task_plot_surveys():
         os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
         html_file =list(filter(lambda x: 'html' in x, targets))[0]
         png_file =list(filter(lambda x: 'png' in x, targets))[0]
-        plotly.offline.plot(fig, filename=html_file)
+        plotly.offline.plot(fig, filename=html_file,auto_open = False)
         fig.write_image(png_file)
-    file_dep = os.path.join(basepath,cfg['paths']['process'],'surveyswitharea.csv')
-    targets = [os.path.join(basepath,cfg['paths']['reports'],'surveys.html'),
-               os.path.join(basepath,cfg['paths']['reports'],'surveys.png')]
+    file_dep = os.path.join(config.basepath,config.cfg['paths']['process'],'surveyswitharea.csv')
+    targets = [os.path.join(config.basepath,config.cfg['paths']['reports'],'surveys.html'),
+               os.path.join(config.basepath,config.cfg['paths']['reports'],'surveys.png')]
                
     return {
 
-        'actions':[(process_survey, [],{'apikey':cfg['mapboxkey']})],
+        'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
         'file_dep':[file_dep],
         'targets':targets,
         'clean':True,
@@ -130,12 +124,12 @@ def task_plot_each_survey():
         fig.write_image(png_file)
         
         
-    file_dep = glob.glob(os.path.join(basepath,cfg['paths']['process'],'*_survey_data.csv'))
-    targets =list(map(lambda x:os.path.join(basepath,cfg['paths']['reports'],os.path.basename(x).replace('csv','html')),file_dep))
+    file_dep = glob.glob(os.path.join(config.basepath,config.cfg['paths']['process'],'*_survey_area_data.csv'))
+    targets =list(map(lambda x:os.path.join(config.basepath,config.cfg['paths']['reports'],os.path.basename(x).replace('csv','html')),file_dep))
     for inputfile,target in zip(file_dep,targets):
         yield {
             'name':target,
-            'actions':[(process_survey, [],{'apikey':cfg['mapboxkey']})],
+            'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
             'file_dep':[inputfile],
             'targets':[target,target.replace('html','png')],
             'clean':True,
@@ -151,14 +145,10 @@ def task_geopgk_survey():
             gdf.to_file(targets[0], layer=survey, driver="GPKG")
 
         
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey_area_data.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**','*_survey_area_data.csv'),recursive=True)
     for file in file_dep:
         target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
-        target = os.path.join(cfg['paths']['reports'],target)
+        target = os.path.join(config.cfg['paths']['reports'],target)
         #countries_gdf
         yield {
             'name':file,
@@ -171,24 +161,29 @@ def task_geopgk_survey():
     
 def task_html_report():
     def process_report(dependencies, targets):
-        data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        data =pd.read_csv(dependencies[0]).iloc[0]
         env = Environment(loader=FileSystemLoader(os.path.join(Path(os.path.abspath(__file__)).parent.parent,'templates')))
         template = env.get_template('report.html')
-        html = template.render(surveyname=data.SurveyId.min(),
-                            surveyinfo=data)
+        html = template.render(SurveyId=data.SurveyId,
+                               StartTime=data.StartTime,
+                               EndTime=data.EndTime,
+                               Coverage=data.Coverage,
+                               Area=data.Area.round(1),
+                               Missing=data.Missing,
+                               Expected=data.Expected,
+                               Longitude=data.Longitude.round(6),
+                               Latitude=data.Latitude.round(6),
+                               map=os.path.basename(dependencies[0].replace('_survey_area_data_summary.csv','_survey_area_data.png')))
         with open(targets[0], 'w') as f:
             f.write(html)        
 
 
         
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(cfg['paths']['output'],cfg['survey']['country'],'**','*_survey_area_data.csv'),recursive=True)
+
+    file_dep = glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**','*_survey_area_data_summary.csv'),recursive=True)
     for file in file_dep:
-        target = os.path.splitext(os.path.basename(file))[0]+'.pdf'
-        target = os.path.join(cfg['paths']['reports'],target)
+        target = os.path.splitext(os.path.basename(file))[0]+'_report.html'
+        target = os.path.join(config.cfg['paths']['reports'],target)
         #countries_gdf
         yield {
             'name':file,

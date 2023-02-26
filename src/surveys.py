@@ -22,9 +22,10 @@ import config
 
 
 
-
+def task_set_up():
+    config.read_config()
  
-      
+    
 def task_make_surveys():
         def process_surveys(dependencies, targets):
             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
@@ -107,13 +108,15 @@ def task_images_dest():
 @create_after(executed='images_dest', target_regex='.*\surveyswitharea.csv')                  
 def task_file_images():
         def process_images(dependencies, targets):
-            survey = pd.read_csv(dependencies[0])
             destination =os.path.dirname(targets[0])
             os.makedirs(destination,exist_ok=True)
+            survey = pd.read_csv(dependencies[0])
             for index,row in survey.iterrows():
                 if not os.path.exists(row.FileDest):
-                    #os.symlink(row.SourceFile, row.FileDest)
-                    shutil.copyfile(row.SourceFile,row.FileDest)
+                    if config.cfg['survey']['outputsymlink']:
+                        os.symlink( os.path.join(config.basepath,row.SourceRel), row.FileDest )
+                    else:
+                        shutil.copyfile(row.SourceFile,row.FileDest)
             shutil.copyfile(dependencies[0],targets[0])
             
 
@@ -133,8 +136,25 @@ def task_file_images():
                 'clean':True,
             } 
 
-
-                      
+def task_move_summary():
+    def move_smmary(dependencies, targets):
+        shutil.copyfile(dependencies[0],targets[0])
+        
+    
+    file_dep = glob.glob(os.path.join(config.basepath,config.cfg['paths']['process'],'*_survey_area_data_summary.csv'))
+    for file in file_dep:
+        country = os.path.basename(file).split('_')[0]
+        sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
+        dest = os.path.join(config.cfg['paths']['output'],country,sitecode)
+        target = os.path.join(dest,os.path.basename(file))
+        yield {
+            'name':file,
+            'actions':[move_smmary],
+            'file_dep':[file],
+            'targets':[target],
+            'uptodate': [True],
+            'clean':True,
+        }                         
             
 
 

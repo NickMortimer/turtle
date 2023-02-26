@@ -10,8 +10,7 @@ import shutil
 
 cfg = None
 basepath = None
-
-def task_read_config():
+def read_config():
     global cfg
     global basepath
     config = {"config": get_var('config', 'NO')}

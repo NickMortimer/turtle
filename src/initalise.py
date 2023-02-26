@@ -27,8 +27,10 @@ from shapely.geometry import MultiPoint
 import xarray as xr
 import rasterio as rio
 from utils import convert_wgs_to_utm
+import config
 
-
+def task_set_up():
+    config.read_config()
 
 
 def task_make_area_list():
@@ -42,12 +44,8 @@ def task_make_area_list():
             os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
             areas.to_csv(targets[0],index=False)                
             
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['surveyarea']),'**/*.shp'),recursive=True)
-        target = os.path.join(basepath,cfg['paths']['process'],'surveyareas.csv')
+        file_dep = glob.glob(os.path.join(config.basepath,os.path.dirname(config.cfg['paths']['surveyarea']),'**/*.shp'),recursive=True)
+        target = os.path.join(config.basepath,config.cfg['paths']['process'],'surveyareas.csv')
         return {
             'actions':[process_area_list],
             'file_dep':file_dep,
@@ -77,16 +75,13 @@ def task_make_grids():
 # xi,yi = np.meshgrid(easting,northing)        
 
 
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    file_dep = glob.glob(os.path.join(basepath,os.path.dirname(cfg['paths']['surveyarea']),'**/*_AOI.shp'),recursive=True)
+
+    file_dep = glob.glob(os.path.join(config.basepath,os.path.dirname(config.cfg['paths']['surveyarea']),'**/*_AOI.shp'),recursive=True)
     for file in file_dep:
         target = file.replace('_AOI.shp','_Grid.shp')
         yield {
             'name':target,
-            'actions':[(process_grid,[],{'gridsize':int(cfg['survey']['gridsize'])})],
+            'actions':[(process_grid,[],{'gridsize':int(config.cfg['survey']['gridsize'])})],
             'file_dep':[file],
             'targets':[target],
             'clean':True,
