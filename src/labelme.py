@@ -134,7 +134,7 @@ def task_process_labelme():
     for item in glob.glob(config.cfg['paths']['labelmesource'],recursive=True):
         file_dep = glob.glob(os.path.join(os.path.dirname(item),'*.json'))
         if file_dep:
-            target =   os.path.join(os.path.dirname(item),'labelme.csv')           
+            target =   os.path.join(os.path.dirname(item),os.path.basename(os.path.dirname(item))+'_labelme.csv')           
             yield {
                 'name':item,
                 'actions':[process_labelme],
@@ -146,7 +146,7 @@ def task_process_labelme():
     
         
 
-        
+@create_after(executed='process_labelme')        
 def task_process_matchup():
     def process_labelmatch(dependencies, targets):
         datafile = glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*_survey_data.csv'))
@@ -162,7 +162,7 @@ def task_process_matchup():
         output.index.name='Key'     
         output[~output.UtmCode.isna()].to_csv(targets[0])
 
-    file_dep =  glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**/labelme.csv'),recursive=True)
+    file_dep =  glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**/*_labelme.csv'),recursive=True)
     for item in file_dep:
         target = item.replace('.csv','_merge.csv')       
         yield {
@@ -173,7 +173,7 @@ def task_process_matchup():
             'clean':True,
         }  
 
-
+@create_after(executed='process_matchup')
 def task_process_mergelabel():
         def process_mergelabel(dependencies, targets):
             os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
@@ -181,7 +181,7 @@ def task_process_mergelabel():
             data = pd.concat([pd.read_csv(file) for file in files])
             data.to_csv(targets[0],index=False)       
             
-        file_dep = glob.glob(os.path.join(config.cfg['paths']['labelmesource'],'labelme_merge.csv'),recursive=True)
+        file_dep = glob.glob(os.path.join(config.cfg['paths']['labelmesource'],'*_labelme_merge.csv'),recursive=True)
         target = os.path.join(config.basepath,config.cfg['paths']['process'],'mergelabelme.csv')        
         return {
             'actions':[process_mergelabel],
@@ -189,7 +189,8 @@ def task_process_mergelabel():
             'targets':[target],
             'clean':True,
         }         
-    
+
+@create_after(executed='process_mergelabel')    
 def task_process_turtle_mergelabel():
         def process_turtlelabel(dependencies, targets):
             os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
@@ -204,7 +205,7 @@ def task_process_turtle_mergelabel():
             'targets':[target],
             'clean':True,
         }     
-
+@create_after(executed='process_turtle_mergelabel')  
 def task_process_turtle_stats():
         def process_turtlelabel(dependencies, targets):
             os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
@@ -430,7 +431,7 @@ def task_calculate_positions():
         drone = drone.apply(calcRealworld,axis=1)
         drone.to_csv(targets[0],index=False) 
 
-    file_dep =  glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**/labelme_merge.csv'),recursive=True)
+    file_dep =  glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**/*labelme_merge.csv'),recursive=True)
     for item in file_dep:
         target =item.replace("merge.csv","merge_points.csv")
         yield {
@@ -441,7 +442,7 @@ def task_calculate_positions():
             'clean':True,
         }   
 
-
+@create_after(executed='calculate_positions')  
 def task_process_turtles():
     def process_turtles(dependencies, targets):
         def count_turtle(grp):
@@ -480,7 +481,7 @@ def task_process_turtles():
             drone.to_csv(targets[0],index=True)
         
 
-    file_dep =  glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**/labelme_merge_points.csv'),recursive=True)
+    file_dep =  glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**/*labelme_merge_points.csv'),recursive=True)
     for item in file_dep:
         target =item.replace("points.csv","points_grouped.csv")
         yield {
@@ -492,7 +493,7 @@ def task_process_turtles():
         }   
 
 
-
+@create_after(executed='process_turtles') 
 def task_process_turtles_totals():
     def from_np_array(array_string):
         array_string = ','.join(array_string.replace('[ ', '[').split())
@@ -527,7 +528,8 @@ def task_process_turtles_totals():
             'file_dep':[item],
             'targets':[target],
             'clean':True,
-        }      
+        }   
+@create_after(executed='process_turtles_totals')             
 def task_merge_turtle_totals():
     def process_merge(dependencies, targets):
         totals = pd.concat([pd.read_csv(file) for file in dependencies])
@@ -575,7 +577,38 @@ def task_process_areas():
         'file_dep':file_dep,
         'targets':[targets],
         'clean':True,
-    }     
+    } 
+
+# def task_plot_surveys():
+#     def process_survey(dependencies, targets,apikey):
+#         drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+#         drone = drone[drone.Longitude>0]
+#         px.set_mapbox_access_token(apikey)
+#         max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
+#         zoom = 11.5 - np.log(max_bound)
+#         fig = px.scatter_mapbox(drone, hover_name='SurveyId', lat="Latitude", lon="Longitude",  
+#                                 mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=zoom)
+#         fig.update_layout(mapbox_style="satellite-streets")
+#         os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
+#         html_file =list(filter(lambda x: 'html' in x, targets))[0]
+#         png_file =list(filter(lambda x: 'png' in x, targets))[0]
+#         plotly.offline.plot(fig, filename=html_file,auto_open = False)
+#         fig.write_image(png_file)
+#     file_dep = os.path.join(config.basepath,config.cfg['paths']['process'],'surveyswitharea.csv')
+#     targets = [os.path.join(config.basepath,config.cfg['paths']['reports'],'surveys.html'),
+#                os.path.join(config.basepath,config.cfg['paths']['reports'],'surveys.png')]
+
+
+#     file_dep =  glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**/*points_grouped.csv'),recursive=True)
+#     for item in file_dep:
+#         target =item.replace("grouped.csv","grouped_turtle.csv")          
+#         yield {
+
+#             'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
+#             'file_dep':[file_dep],
+#             'targets':targets,
+#             'clean':True,
+#         } 
 
         
 def task_turtles_report():
@@ -588,15 +621,21 @@ def task_turtles_report():
 
 
             turte_file['TotalTurtles'] =0
-            turtle = turte_file.groupby('SurveyId').count()
-            counts = turtle['TotalTurtles']
+            turtle = turte_file.groupby('SurveyId').count().reset_index(-1)
+            turtle.SurveyId =turtle.SurveyId.apply(lambda x: x.replace('AU_',''))
+            counts = turtle[['SurveyId','TotalTurtles']]
             image_area = pd.read_csv(list(filter(lambda x: 'areas.csv' in x, dependencies))[0],index_col='id')
+            image_area['SurveyId'] =image_area.NewName.str.split('_',expand=True)[[3,4]].apply(lambda x :"_".join(x)[:-2],axis=1)
+            image_area = image_area.groupby('SurveyId').first().reset_index(-1)
+            image_area = image_area[['SurveyId','SurveyAreaHec']].set_index('SurveyId')
+            counts = counts.set_index('SurveyId')
             output =image_area.join(counts)
             output['TurtlesPerHec'] = output['TotalTurtles']/output['SurveyAreaHec']
             output.to_csv(targets[0],index=True)
 
         file_dep =[os.path.join(config.basepath,config.cfg['paths']['process'],'turtles_totals.csv'),
                     os.path.join(config.basepath,config.cfg['paths']['process'],'areas.csv')]
+        os.makedirs(config.cfg['paths']['reports'],exist_ok=True)
         targets = os.path.join(config.cfg['paths']['reports'],'turtles_per_survey.csv')
         return {
 
