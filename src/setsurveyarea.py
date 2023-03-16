@@ -45,8 +45,8 @@ def task_detect_surveys():
             position =position.join([starttime,endtime,count])
             position.to_csv(targets[0],index=True)
             
-        file_dep = os.path.join(config.basepath,config.cfg['paths']['process'],'imagedata.csv')
-        targets = (os.path.join(config.basepath,config.cfg['paths']['process'],'surveysummary.csv'),os.path.join(config.basepath,config.cfg['paths']['process'],'surveys.csv'))
+        file_dep = os.path.join(config.geturl('process'),'imagedata.csv')
+        targets = (os.path.join(config.geturl('process'),'surveysummary.csv'),os.path.join(config.geturl('process'),'surveys.csv'))
         return {
             'actions':[(process_survey, [],{'timedelta':config.cfg['survey']['timedelta'],'maxpitch':config.cfg['survey']['maxpitch']})],
             'file_dep':[file_dep],
@@ -97,9 +97,9 @@ def task_assign_area():
             pnts.to_csv(targets[0])
             
 
-        file_dep = [os.path.join(config.basepath,config.cfg['paths']['process'],'surveys.csv'),
-                    os.path.join(config.basepath,config.cfg['paths']['process'],'surveyareas.csv')]
-        target = os.path.join(config.basepath,config.cfg['paths']['process'],'surveyswitharea.csv')
+        file_dep = [os.path.join(config.geturl('process'),'surveys.csv'),
+                    os.path.join(config.geturl('process'),'surveyareas.csv')]
+        target = os.path.join(config.geturl('process'),'surveyswitharea.csv')
         return {
             'actions':[(process_assign_area,[],{'countrycode':config.cfg["survey"]["country"]})],
             'file_dep':file_dep,

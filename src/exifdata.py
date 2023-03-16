@@ -23,23 +23,33 @@ wanted ={"SourceFile","FileModifyDate","ImageDescription",
          "FlightPitchDegree","CamReverse","GimbalReverse","CalibratedFocalLength",
          "CalibratedOpticalCenterX","CalibratedOpticalCenterY","ImageWidth",
          "ImageHeight","GPSAltitude","GPSLatitude","GPSLongitude","CircleOfConfusion",
-         "FOV","Latitude",'Longitude','SubSecDateTimeOriginal'}
+         "FOV","Latitude",'Longitude','SubSecDateTimeOriginal','FlightYSpeed','FlightXSpeed','FlightYSpeed'
+         'Orientation','ShutterSpeedValue','ApertureValue','WhiteBalance','RtkFlag','DewarpData','DewarpFlag'}
+
+ 					
+										
+								
+													
+								
+							
+										
+	
+
 
 def task_setup():
     config.read_config()
 
 def task_create_json():
-        exifpath = os.path.join(config.basepath,config.cfg['paths']['exiftool'])
-        for item in glob.glob(os.path.join(config.basepath,config.cfg['paths']['imagesource']),recursive=True):
-            source = os.path.join(config.basepath,os.path.dirname(item))
-            if glob.glob(os.path.join(source,config.cfg['paths']['imagewild'].upper())) or glob.glob(config.cfg['paths']['imagewild'].lower()):
-                target  = os.path.join(source,'exif.json')
-                filter = os.path.join(source,config.cfg['paths']['imagewild'])
+        exifpath = os.path.join(config.geturl('exiftool'))
+        for item in glob.glob(config.geturl('imagesource'),recursive=True):
+            if glob.glob(os.path.join(item,config.cfg['paths']['imagewild'])):
+                target  = os.path.join(item,'exif.json')
+                filter = os.path.join(item,config.cfg['paths']['imagewild'])
                 file_dep = glob.glob(filter)
                 if file_dep:
                     yield {
-                        'name':item,
-                        'actions':[f'"{exifpath}" -json "{filter}" > "{target}"'],
+                        'name':target,
+                        'actions':[f'"{exifpath}" -ext JPG -ext jpg -json "{item}" > "{target}"'],
                         'targets':[target],
                         'uptodate':[True],
 #                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
@@ -62,24 +72,23 @@ def task_process_json():
                 drone.loc[ ~drone['GPSLongitude'].isna(),'Longitude']=drone.loc[ ~drone['GPSLongitude'].isna(),'GPSLongitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
                 drone.loc[ ~drone['GPSLatitude'].isna(),'Latitude']=drone.loc[ ~drone['GPSLatitude'].isna(),'GPSLatitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
                 drone.loc[drone['GPSLatitudeRef']=='South','Latitude'] =drone.loc[drone['GPSLatitudeRef']=='South','Latitude']*-1
-                #drone = drone[drone.columns[drone.columns.isin(wanted)]]
+                drone = drone[drone.columns[drone.columns.isin(wanted)]]
                 if 'SubSecDateTimeOriginal' in drone.columns:
                     drone['TimeStamp'] = pd.to_datetime(drone.SubSecDateTimeOriginal,format='%Y:%m:%d %H:%M:%S.%f')
                 else:
                     drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
-                sourcepath = config.cfg['paths']['imagesource'].split('/')[0]
-                drone['SourceRel'] =drone.SourceFile.str.extract(f'(?P<base>{sourcepath}.+)')['base'].apply(os.path.normpath)
+                sourcepath = config.CATALOG_DIR
+                drone['SourceRel'] =drone.SourceFile.apply(lambda x: os.path.relpath(x,start=sourcepath))
                 drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d+)\.(jpg|JPG)')['Sequence']
                 drone.set_index('Sequence',inplace=True)
                 drone.to_csv(list(targets)[0],index=True)
             
 
-        for item in glob.glob(os.path.join(config.basepath,os.path.dirname(config.cfg['paths']['imagesource']),'exif.json'),recursive=True):
-            source = os.path.join(config.basepath,os.path.dirname(item))
+        for item in glob.glob(os.path.join(config.geturl('imagesource'),'exif.json'),recursive=True):
             file_dep  =  item
-            target =   os.path.join(source,'exif.csv')           
+            target =   item.replace('json','csv')           
             yield {
-                'name':source,
+                'name':target,
                 'actions':[process_json],
                 'file_dep':[file_dep],
                 'targets':[target],

@@ -44,8 +44,8 @@ def task_make_area_list():
             os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
             areas.to_csv(targets[0],index=False)                
             
-        file_dep = glob.glob(os.path.join(config.basepath,os.path.dirname(config.cfg['paths']['surveyarea']),'**/*.shp'),recursive=True)
-        target = os.path.join(config.basepath,config.cfg['paths']['process'],'surveyareas.csv')
+        file_dep = glob.glob(os.path.join(config.geturl('surveyarea'),'**/*.shp'),recursive=True)
+        target = os.path.join(config.geturl('process'),'surveyareas.csv')
         return {
             'actions':[process_area_list],
             'file_dep':file_dep,
@@ -53,7 +53,7 @@ def task_make_area_list():
             'clean':True,
         } 
         
-        
+@create_after(executed='make_area_list')         
 def task_make_grids():
     def process_grid(dependencies, targets,gridsize=10):
         area = gp.read_file(dependencies[0])
@@ -76,7 +76,7 @@ def task_make_grids():
 
 
 
-    file_dep = glob.glob(os.path.join(config.basepath,os.path.dirname(config.cfg['paths']['surveyarea']),'**/*_AOI.shp'),recursive=True)
+    file_dep = glob.glob(os.path.join(config.geturl('surveyarea'),'**/*_AOI.shp'),recursive=True)
     for file in file_dep:
         target = file.replace('_AOI.shp','_Grid.shp')
         yield {

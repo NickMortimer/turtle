@@ -88,7 +88,7 @@ def task_process_mergpos():
                 mrk['Easting'],mrk['Northing'] =utmproj(mrk['Longitude'].values,mrk['Latitude'].values)
                 mrk['EllipsoideHight'] = pd.to_numeric(mrk.EllipsoideHight.str.split(',',expand=True)[0])
                 mrk =mrk.add_suffix('Mrk')
-                drone =drone.join(mrk,rsuffix='Mrk')
+                drone =drone.join(mrk[['UTCTimeMrk','EllipsoideHightMrk','LatitudeMrk','LongitudeMrk','EastingMrk','NorthingMrk']],rsuffix='Mrk')
             rtk_file=list(filter(lambda x: '_Timestamp.CSV' in x, dependencies))
             if rtk_file:
                 rtk =pd.read_csv(rtk_file[0],parse_dates=['GPST'],index_col=['Sequence'])
@@ -98,11 +98,11 @@ def task_process_mergpos():
             drone.set_index('TimeStamp',inplace=True)
             drone.sort_index(inplace=True)
             drone = drone[pd.notna(drone.index)]
-            drone.to_csv(list(targets)[0],index=True)
+            drone.to_csv(targets[0],index=True)
             
 
-        for item in glob.glob(os.path.join(config.basepath,config.cfg['paths']['imagesource']),recursive=True):
-            source = os.path.join(config.basepath,os.path.dirname(item))
+        for item in glob.glob(config.geturl('imagesource'),recursive=True):
+            source = os.path.dirname(item)
             file_dep  =  list(filter(lambda x:  any(f in x for f in ['exif.csv','Timestamp']), glob.glob(os.path.join(source,'*.*'))))
             fild_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
             if file_dep:
@@ -132,8 +132,8 @@ def task_addpolygons():
         
 
     dewarp = pd.to_numeric(config.cfg['survey']['dewarp'] )
-    for file_dep in glob.glob(os.path.join(config.basepath,config.cfg['paths']['imagesource'],'position.csv'),recursive=True):
-        target = os.path.join(config.basepath,os.path.dirname(file_dep),'polygons.csv')   
+    for file_dep in glob.glob(os.path.join(config.geturl('imagesource'),'position.csv'),recursive=True):
+        target = file_dep.replace('position.csv','polygons.csv')   
         yield {
             'name':file_dep,
             'actions':[(process_polygons, [],{'dewarp':dewarp})],
@@ -151,9 +151,9 @@ def task_merge_xif():
             drone.sort_index(inplace=True)
             drone.to_csv(list(targets)[0],index=True)
             
-        searchpath = os.path.join(config.basepath,os.path.dirname(config.cfg['paths']['imagesource']),'polygons.csv')
+        searchpath = os.path.join(config.geturl('imagesource'),'polygons.csv')
         file_dep = glob.glob(searchpath,recursive=True)
-        processpath =os.path.join(config.basepath,config.cfg['paths']['process'])
+        processpath =config.geturl('process')
         os.makedirs(processpath,exist_ok=True)
         target = os.path.join(processpath,'imagedata.csv')
         return {
