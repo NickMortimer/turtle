@@ -50,7 +50,7 @@ def task_make_surveys():
                 'clean':True,
             } 
             
-@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')             
+@create_after(executed='make_surveys')             
 def task_calculate_survey_areas():
     def poly_to_points(polygon):
         return np.dstack(polygon.exterior.coords.xy)
