@@ -109,7 +109,7 @@ def task_merge_xif():
 
         searchpath = os.path.join(config.geturl('imagesource'),'polygons.csv')
         file_dep = glob.glob(searchpath,recursive=True)
-        processpath =os.path.join(config.geturl('process')
+        processpath =config.geturl('process')
         os.makedirs(processpath,exist_ok=True)
         target = os.path.join(processpath,'imagedata.csv')
         return {
