@@ -28,6 +28,7 @@ import xarray as xr
 import rasterio as rio
 import utils
 from utils import convert_wgs_to_utm
+import config
 
 
 
@@ -54,12 +55,9 @@ def task_process_mergpos():
             drone = drone[pd.notna(drone.index)]
             drone.to_csv(list(targets)[0],index=True)
             
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource']),recursive=True):
-            source = os.path.join(basepath,os.path.dirname(item))
+
+        for item in glob.glob(config.geturl('imagesource'),recursive=True):
+            source = item
             file_dep  =  list(filter(lambda x:  any(f in x for f in ['exif.csv','Timestamp']), glob.glob(os.path.join(source,'*.*'))))
             fild_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
             if file_dep:
@@ -87,12 +85,9 @@ def task_addpolygons():
         
         
         
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    dewarp = pd.to_numeric(cfg['survey']['dewarp'] )
-    for file_dep in glob.glob(os.path.join(basepath,cfg['paths']['imagesource'],'position.csv'),recursive=True):
+
+    dewarp = pd.to_numeric(config.cfg['survey']['dewarp'] )
+    for file_dep in glob.glob(os.path.join(config.geturl('imagesource'),'position.csv'),recursive=True):
         target = os.path.join(basepath,os.path.dirname(file_dep),'polygons.csv')   
         yield {
             'name':file_dep,
@@ -111,13 +106,10 @@ def task_merge_xif():
             drone.sort_index(inplace=True)
             drone.to_csv(list(targets)[0],index=True)
             
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'polygons.csv')
+
+        searchpath = os.path.join(config.geturl('imagesource'),'polygons.csv')
         file_dep = glob.glob(searchpath,recursive=True)
-        processpath =os.path.join(basepath,cfg['paths']['process'])
+        processpath =os.path.join(config.geturl('process')
         os.makedirs(processpath,exist_ok=True)
         target = os.path.join(processpath,'imagedata.csv')
         return {
