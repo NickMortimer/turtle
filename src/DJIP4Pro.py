@@ -27,6 +27,7 @@ from shapely.geometry import MultiPoint
 import xarray as xr
 import rasterio as rio
 from  utils import convert_wgs_to_utm
+import config
 
 
  
@@ -83,17 +84,13 @@ def task_process_mergpos():
             drone = drone[pd.notna(drone.index)]
             drone.to_csv(list(targets)[0],index=True)
             
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource']),recursive=True):
-            source = os.path.join(basepath,os.path.dirname(item))
-            file_dep  =  list(filter(lambda x:  any(f in x for f in ['exif.csv','Timestamp']), glob.glob(os.path.join(source,'*.*'))))
+
+        for item in glob.glob(config.geturl('imagesource'),recursive=True):
+            file_dep  =  list(filter(lambda x:  any(f in x for f in ['exif.csv','Timestamp']), glob.glob(os.path.join(item,'*.*'))))
             if file_dep:
-                target =   os.path.join(source,'position.csv')           
+                target =   os.path.join(item,'position.csv')           
                 yield {
-                    'name':source,
+                    'name':target,
                     'actions':[process_json],
                     'file_dep':file_dep,
                     'targets':[target],
@@ -116,13 +113,10 @@ def task_addpolygons():
         
         
         
-    config = {"config": get_var('config', 'NO')}
-    with open(config['config'], 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, yaml.SafeLoader)
-    basepath = os.path.dirname(config['config'])
-    dewarp = pd.to_numeric(cfg['survey']['dewarp'] )
-    for file_dep in glob.glob(os.path.join(basepath,cfg['paths']['imagesource'],'position.csv'),recursive=True):
-        target = os.path.join(basepath,os.path.dirname(file_dep),'polygons.csv')   
+
+    dewarp = pd.to_numeric(config.cfg['survey']['dewarp'] )
+    for file_dep in glob.glob(os.path.join(config.geturl('imagesource'),'position.csv'),recursive=True):
+        target = os.path.join(os.path.dirname(file_dep),'polygons.csv')   
         yield {
             'name':file_dep,
             'actions':[(process_polygons, [],{'dewarp':dewarp})],
@@ -138,16 +132,13 @@ def task_merge_xif():
             drone = pd.concat([pd.read_csv(file,index_col='TimeStamp',parse_dates=['TimeStamp']) 
                             for file in list(dependencies)]) 
             drone.sort_index(inplace=True)
+            drone['FileName'] =drone.SourceFile.apply(os.path.basename)
             drone =drone.drop_duplicates(subset= ['ImageTime','FileName'])
             drone.to_csv(list(targets)[0],index=True)
             
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'polygons.csv')
+        searchpath = os.path.join(config.geturl('imagesource'),'polygons.csv')
         file_dep = glob.glob(searchpath,recursive=True)
-        processpath =os.path.join(basepath,cfg['paths']['process'])
+        processpath =config.geturl('process')
         os.makedirs(processpath,exist_ok=True)
         target = os.path.join(processpath,'imagedata.csv')
         return {

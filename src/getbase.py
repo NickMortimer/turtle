@@ -1,4 +1,4 @@
-import pysftp
+import pysftp   
 
 
 from os.path import supports_unicode_filenames
@@ -13,6 +13,7 @@ from doit import create_after
 from read_rtk import read_mrk_gpst
 import shutil
 from read_rtk import read_pos
+import config
 
 def getbasenames(times,station,destination):
     """Create the names of the files neaded to get from Geoscience Australia
@@ -37,8 +38,8 @@ def getbasenames(times,station,destination):
                        'file':f'{station}_R_{day.year}{day.day_of_year:03}0000_01D_MN.rnx.gz'})
     return pd.DataFrame(files)
 
-def getbase(files,cfg):
-    with pysftp.Connection('sftp.data.gnss.ga.gov.au', username='anonymous', password=cfg['user']['email']) as sftp:
+def getbase(files):
+    with pysftp.Connection('sftp.data.gnss.ga.gov.au', username='anonymous', password=config.cfg['user']['email']) as sftp:
         for item in files:
             dest = os.path.join(item['destination'],item['file'])
             print(dest)
@@ -54,23 +55,19 @@ def getbase(files,cfg):
 
 
 def task_calc_basefiles():
-        def calc_basefiles(dependencies, targets,cfg,basepath):
+        def calc_basefiles(dependencies, targets):
             marks = [read_mrk_gpst(mark) for mark in dependencies]
-            files =pd.concat([getbasenames(df.index,cfg['survey']['basestation'],
-                                           os.path.join(basepath,cfg['paths']['gnssceche'])) for df in marks])
+            files =pd.concat([getbasenames(df.index,config.cfg['survey']['basestation'],
+                                           config.geturl('gnssceche')) for df in marks])
             files.drop_duplicates(inplace=True)
             files.to_csv(targets[0],index=False)
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        os.makedirs(os.path.join(basepath,cfg['paths']['process']),exist_ok=True)
-        os.makedirs(os.path.join(basepath,cfg['paths']['gnssceche']),exist_ok=True)
-        file_dep =glob.glob(os.path.join(basepath,cfg['paths']['marksource']),recursive=True)
+        os.makedirs(config.geturl('process'),exist_ok=True)
+        os.makedirs(config.geturl('gnssceche'),exist_ok=True)
+        file_dep =glob.glob(config.geturl('marksource'),recursive=True)
         file_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
-        target = os.path.join(basepath,cfg['paths']['process'],'basefiles.csv')
+        target = os.path.join(config.geturl('process'),'basefiles.csv')
         return {
-            'actions':[(calc_basefiles, [],{'cfg':cfg,'basepath':basepath})],
+            'actions':[(calc_basefiles, [])],
             'file_dep':file_dep,
             'targets':[target],
             'uptodate':[True],
@@ -80,38 +77,32 @@ def task_calc_basefiles():
         
         
              
-        
+@create_after(executed='calc_basefiles', target_regex='*')          
 def task_get_basefiles():
-        def calc_basefiles(dependencies, targets,basepath,cfg):
+        def calc_basefiles(dependencies, targets):
             basefiles = pd.read_csv(dependencies[0])
-            getbase(basefiles.to_dict('records'),cfg)
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep = os.path.join(basepath,cfg['paths']['process'],'basefiles.csv')
+            getbase(basefiles.to_dict('records'))
+        file_dep = os.path.join(config.geturl('process'),'basefiles.csv')
         return {
-            'actions':[(calc_basefiles, [],{'basepath':basepath,'cfg':cfg,'basepath':basepath})],
+            'actions':[calc_basefiles],
             'file_dep':[file_dep],
             'uptodate':[True],
             'clean':True,
-        }         
+        }    
+     
+@create_after(executed='get_basefiles', target_regex='*')          
 def task_unzip_base():
         def calc_basefiles(dependencies, targets,cfg,basepath):
             surveys = pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
             files =pd.concat([getbasenames(df.index,cfg['survey']['basestation'],
-                                           os.path.join(basepath,cfg['paths']['gnssceche'])) for survey,df in surveys.groupby('Survey')])
+                                           config.geturl('gnssceche')) for survey,df in surveys.groupby('Survey')])
             files.drop_duplicates(inplace=True)
             files.to_csv(targets[0],index=False)
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        crx2nxpath = os.path.join(basepath,cfg['paths']['rtklib'],'crx2rnx.exe')
-        gnsspath = os.path.join(basepath,cfg['paths']['gnssceche'])
+        crx2nxpath = os.path.join(config.geturl('rtklib'),'crx2rnx.exe')
+        gnsspath = config.geturl('gnssceche')
         file_dep = glob.glob(os.path.join(gnsspath,'*.gz'))
         file_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
-        zip = os.path.join(basepath,cfg['paths']['7zip'])
+        zip = config.geturl('7zip')
         for file in file_dep:
             yield {
                 'name':file,
@@ -121,20 +112,16 @@ def task_unzip_base():
                 'uptodate':[run_once],
             } 
 
-
+@create_after(executed='unzip_base', target_regex='*')    
 def task_crx2rinx_base():
         def calc_basefiles(dependencies, targets,cfg,basepath):
             surveys = pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
             files =pd.concat([getbasenames(df.index,cfg['survey']['basestation'],
-                                           os.path.join(basepath,cfg['paths']['gnssceche'])) for survey,df in surveys.groupby('Survey')])
+                                           config.geturl('gnssceche')) for survey,df in surveys.groupby('Survey')])
             files.drop_duplicates(inplace=True)
             files.to_csv(targets[0],index=False)
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        crx2nxpath = os.path.join(basepath,cfg['paths']['crx2rnx'])
-        file_dep = glob.glob(os.path.join(basepath,cfg['paths']['gnssceche'],'*.crx'))
+        crx2nxpath = config.geturl('crx2rnx')
+        file_dep = glob.glob(os.path.join(config.geturl('gnssceche'),'*.crx'))
         targets=list(map (lambda x:x.replace('.crx','.rnx'),file_dep))
         for file,target in zip(file_dep,targets):
             if not os.path.exists(target):
@@ -145,20 +132,16 @@ def task_crx2rinx_base():
                     'uptodate':[run_once],
                     'clean':True,
                 }          
-        targets = os.path.join(basepath,os.path.dirname(cfg['paths']['output']),'merge/surveys.html')
+        targets = os.path.join(config.geturl('output'),'merge/surveys.html')
         
-            
+@create_after(executed='crx2rinx_base', target_regex='*')                
 def task_move_nav():
         def move_nav(dependencies, targets):
             gnss_file = targets[0]
             mrk =read_mrk_gpst(dependencies[0])
             getbasenames(mrk.index,cfg['survey']['basestation'],os.path.dirname(gnss_file)).to_csv(gnss_file,index=True)
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource']),recursive=True):
-            source = os.path.join(basepath,os.path.dirname(item))
+        for item in glob.glob(config.geturl('imagesource'),recursive=True):
+            source = os.path.dirname(item)
             mark = glob.glob(os.path.join(source,'*Timestamp.MRK'))
             mark = list(filter(lambda x:os.stat(x).st_size > 0,mark))
             if mark:
@@ -169,18 +152,14 @@ def task_move_nav():
                     'targets':[os.path.join(os.path.dirname(mark[0]),'gnss.csv')],
                     'clean':True,
                 }          
-
+@create_after(executed='move_nav', target_regex='*')      
 def task_move_nav_files():
         def move_nav_files(dependencies, targets):
             if os.path.exists(dependencies[0]) & ~os.path.exists(targets[0]):
                 shutil.copy(dependencies[0],targets[0])
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        for item in glob.glob(os.path.join(basepath,cfg['paths']['imagesource'],'gnss.csv'),recursive=True):
-            sourcepath = os.path.join(basepath,cfg['paths']['gnssceche'])
-            destpath = os.path.join(basepath,os.path.dirname(item))
+        for item in glob.glob(os.path.join(config.geturl('imagesource'),'gnss.csv'),recursive=True):
+            sourcepath = config.geturl('gnssceche')
+            destpath = os.path.dirname(item)
             files = pd.read_csv(item)
             files.file =files.file.str.replace('crx.gz','rnx',regex=False)
             files.file =files.file.str.replace('rnx.gz','rnx',regex=False)
@@ -195,20 +174,16 @@ def task_move_nav_files():
                         'targets':[destfile],
                         'clean':True,
                     } 
-
+@create_after(executed='move_nav_files', target_regex='*')   
 def task_rtk():
         def process_rtk(dependencies, targets):
             gnss_file = targets[0]
             mrk =read_mrk_gpst(dependencies[0]).set_index('UTCtime')
-            getbasenames(mrk.index,cfg['survey']['basestation'],os.path.dirname(gnss_file)).to_csv(gnss_file,index=True)
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        file_dep =glob.glob(os.path.join(basepath,cfg['paths']['obssource']),recursive=True)
+            getbasenames(mrk.index,config.cfg['survey']['basestation'],os.path.dirname(gnss_file)).to_csv(gnss_file,index=True)
+        file_dep =glob.glob(config.geturl('obssource'),recursive=True)
         file_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
-        exepath = f'{os.path.join(basepath,cfg["paths"]["rtklib"],"rnx2rtkp.exe")}'
-        rtkconfig = os.path.join(basepath,cfg['paths']['rtkconfig'])
+        exepath = f'{os.path.join(config.geturl("rtklib"),"rnx2rtkp.exe")}'
+        rtkconfig = config.geturl('rtkconfig')
         for file in file_dep:
             base = os.path.join(os.path.dirname(file),'*_15M_01S_MO.rnx')
             nav = os.path.join(os.path.dirname(file),'*_01D_MN.rnx')
@@ -222,7 +197,7 @@ def task_rtk():
                         'uptodate':[True],
                         'clean':True,
                     }          
-
+@create_after(executed='rtk', target_regex='*')  
 def task_calc_pic_pos():
         def process_pic_pos(dependencies, targets):
             markdata =read_mrk_gpst(list(filter(lambda x: '.MRK' in x, dependencies))[0])
@@ -231,14 +206,10 @@ def task_calc_pic_pos():
             combined.loc[:,combined.columns !='Sequence']  = combined.loc[:,combined.columns !='Sequence'].interpolate(method='index')
             combined.index.name = 'GPST'
             combined[~combined.Sequence.isna()].to_csv(targets[0],index=True)
-        config = {"config": get_var('config', 'NO')}
-        with open(config['config'], 'r') as ymlfile:
-            cfg = yaml.load(ymlfile, yaml.SafeLoader)
-        basepath = os.path.dirname(config['config'])
-        pos_files =glob.glob(os.path.join(basepath,cfg['paths']['possource']),recursive=True)
-        mark_files =glob.glob(os.path.join(basepath,cfg['paths']['marksource']),recursive=True)
-        exepath = f'{os.path.join(basepath,cfg["paths"]["rtklib"],"rnx2rtkp.exe")}'
-        rtkconfig = os.path.join(basepath,cfg['paths']['rtkconfig'])
+        pos_files =glob.glob(config.geturl('possource'),recursive=True)
+        mark_files =glob.glob(config.geturl('marksource'),recursive=True)
+        exepath = f'{os.path.join(config.geturl("rtklib"),"rnx2rtkp.exe")}'
+        rtkconfig = config.geturl('rtkconfig')
         for mark,pos in zip(mark_files,pos_files):
             yield {
                 'name':mark,

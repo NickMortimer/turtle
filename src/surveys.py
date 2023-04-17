@@ -111,7 +111,8 @@ def task_file_images():
             for index,row in survey.iterrows():
                 if not os.path.exists(row.FileDest):
                     if config.cfg['survey']['outputsymlink']:
-                        os.symlink( os.path.join(config.CATALOG_DIR,row.SourceRel), row.FileDest )
+                        relpath = os.path.join(os.path.relpath(os.path.dirname(row.SourceFile),start=os.path.dirname(row.FileDest)),os.path.basename(row.SourceFile))
+                        os.symlink(relpath, row.FileDest )
                     else:
                         shutil.copyfile(row.SourceFile,row.FileDest)
             shutil.copyfile(dependencies[0],targets[0])
