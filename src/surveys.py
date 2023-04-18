@@ -18,12 +18,9 @@ import shutil
 import shapely.wkt
 from shapely.geometry import MultiPoint
 from geopandas.tools import sjoin
+from doit.task import clean_targets
 import config
 
-
-
-def task_set_up():
-    config.read_config()
  
     
 def task_make_surveys():
@@ -37,6 +34,8 @@ def task_make_surveys():
                 data['NewName']=data.apply(lambda item: f"{config.cfg['survey']['dronetype']}_{config.cfg['survey']['cameratype']}_{config.cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
                 filename = os.path.join(config.geturl('process'),f"{data['SurveyId'].min()}_survey.csv")                
                 data.to_csv(filename,index=True)
+        def clean():
+            [os.remove(file) for file in glob.glob(os.path.join(config.geturl('process'),'*_survey.csv'))]
             
         file_dep = os.path.join(config.geturl('process'),'surveyswitharea.csv')
         if os.path.exists(file_dep):
@@ -47,16 +46,18 @@ def task_make_surveys():
                 'actions':[(process_surveys,[])],
                 'file_dep':[file_dep],
                 'targets':targets,
-                'clean':True,
+                'clean': [clean_targets, clean],
             } 
             
-@create_after(executed='make_surveys')             
+@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')             
 def task_calculate_survey_areas():
     def poly_to_points(polygon):
         return np.dstack(polygon.exterior.coords.xy)
     
     def survey_area(grp):
-        p=MultiPoint(np.hstack(grp['ImagePolygon'].apply(poly_to_points))[0]).convex_hull
+        # switch to using image locations
+        #p=MultiPoint(np.hstack(grp['ImagePolygon'].apply(poly_to_points))[0]).convex_hull
+        p =MultiPoint(np.dstack((grp['ImageEasting'],grp['ImageNorthing']))[0]).convex_hull
         return p.area
     
     def calculate_area(dependencies, targets):
@@ -68,7 +69,9 @@ def task_calculate_survey_areas():
         gdf['SurveyAreaHec'] = survey_area(gdf)/10000
         gdf.to_csv(targets[0],index=True)
         
-
+    def clean():
+        [os.remove(file) for file in glob.glob(os.path.join(config.geturl('process'),'*_survey_area.csv'))]
+         
     file_dep = glob.glob(os.path.join(config.geturl('process'),'*_survey.csv'),recursive=True)
     for file in file_dep:
         target = file.replace('_survey','_survey_area')
@@ -78,7 +81,7 @@ def task_calculate_survey_areas():
             'file_dep':[file],
             'targets':[target],
             'uptodate': [True],
-            'clean':True,
+            'clean': [clean_targets, clean],
         } 
 
 
@@ -89,7 +92,14 @@ def task_images_dest():
             os.makedirs(destination,exist_ok=True)
             survey['FileDest'] = survey['NewName'].apply(lambda x: os.path.join(destination,x))
             survey.to_csv(targets[0],index=False)
-
+        def clean():
+            [os.remove(file) for file in glob.glob(os.path.join(config.geturl('process'),'*_survey_area_data.csv'))]
+            [os.remove(file) for file in glob.glob(os.path.join(config.geturl('process'),'*_survey_area_data_summary.csv'))]
+            survey =f"{config.geturl('output')}/{config.cfg['survey']['country']}"
+            if os.path.exists(survey):
+                shutil.rmtree(survey)
+            if os.path.exists(config.geturl('reports')):
+                shutil.rmtree(config.geturl('reports'))
         file_dep = glob.glob(os.path.join(config.geturl('process'),'*_survey_area.csv'))
         for file in file_dep:
             target = file.replace('_survey_area','_survey_area_data')
@@ -99,7 +109,7 @@ def task_images_dest():
                 'file_dep':[file],
                 'targets':[target],
                 'uptodate': [True],
-                'clean':True,
+                'clean':[clean_targets, clean],
             } 
 
 @create_after(executed='images_dest', target_regex='.*\surveyswitharea.csv')                  
@@ -117,7 +127,6 @@ def task_file_images():
                         shutil.copyfile(row.SourceFile,row.FileDest)
             shutil.copyfile(dependencies[0],targets[0])
             
-
         file_dep = glob.glob(os.path.join(config.geturl('process'),'*_survey_area_data.csv'))
         for file in file_dep:
             target = os.path.join(config.getdest(os.path.basename(file)),os.path.basename(file))

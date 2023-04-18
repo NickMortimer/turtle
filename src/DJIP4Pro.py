@@ -97,7 +97,7 @@ def task_process_mergpos():
                     'clean':True,
  
                }    
-    
+@create_after(executed='process_mergpos', target_regex='*.csv')      
 def task_addpolygons():
     def process_polygons(dependencies, targets,dewarp):
         def getpoly(item):
@@ -124,7 +124,7 @@ def task_addpolygons():
             'targets':[target],
             'clean':True,
         }       
-    
+@create_after(executed='addpolygons', target_regex='*.csv')          
 def task_merge_xif():
         def process_xif(dependencies, targets):
             target = list(targets)[0]

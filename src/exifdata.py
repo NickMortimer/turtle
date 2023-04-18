@@ -40,6 +40,8 @@ def task_setup():
     config.read_config()
 
 def task_create_json():
+        def do_nothing():
+             pass
         exifpath = os.path.join(config.geturl('exiftool'))
         for item in glob.glob(config.geturl('imagesource'),recursive=True):
             if glob.glob(os.path.join(item,config.cfg['paths']['imagewild'])):
@@ -53,7 +55,7 @@ def task_create_json():
                         'targets':[target],
                         'uptodate':[True],
 #                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
-                        'clean':True,
+                        'clean':[do_nothing],
                     }
     
 @create_after(executed='create_json', target_regex='.*\exif.json')    
@@ -92,7 +94,6 @@ def task_process_json():
                 'actions':[process_json],
                 'file_dep':[file_dep],
                 'targets':[target],
-
                 'clean':True,
             }
             
@@ -130,4 +131,3 @@ if __name__ == '__main__':
     import doit
     DOIT_CONFIG = {'check_file_uptodate': 'timestamp'}
     #print(globals())
-    doit.run(globals())        
