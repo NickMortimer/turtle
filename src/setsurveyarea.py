@@ -41,7 +41,7 @@ def task_detect_surveys():
             starttime = drone.groupby('Survey')['StartTime'].min()
             endtime = drone.groupby('Survey')['EndTime'].max()
             count =   drone.groupby('Survey').count()['SourceFile'].rename('ImageCount')
-            position = drone.groupby('Survey').mean()[['Latitude','Longitude']]
+            position = drone.groupby('Survey')[['Latitude','Longitude']].mean()
             position =position.join([starttime,endtime,count])
             position.to_csv(targets[0],index=True)
             
@@ -76,7 +76,8 @@ def task_assign_area():
                 shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
                 pnts = sjoin(pnts, shapes, how='left')
                 pnts.loc[pnts.id.isna(),'id']=''
-                pnts =pnts.groupby('Survey').apply(setarea)
+                ids = pnts.groupby('Survey')[['id']].apply(setarea).reset_index(-2)
+                pnts.id = ids.id
                 pnts.loc[pnts.id=='','id'] ='NOAREA'
             except:
                 pnts = drone
