@@ -6,29 +6,16 @@ import doit
 import glob
 import os
 import numpy as np
-from pandas.core.arrays.integer import Int64Dtype
-from pandas.io.parsers import read_csv
-import yaml
 import pandas as pd
-from doit import get_var
-from doit.tools import run_once
 from doit import create_after
 import numpy as np
-import plotly
-import plotly.express as px
 import geopandas as gp
 import json
 import ast
-from pyproj import Proj
 from drone import P4rtk
-from sklearn.cluster import AffinityPropagation
-from sklearn import metrics
 from sklearn.cluster import MeanShift
 import matplotlib.pyplot as plt
 import shapely.wkt
-import plotly
-import plotly.express as px
-from PIL import Image
 import config
 import shapely.wkt
 from shapely.geometry import MultiPoint

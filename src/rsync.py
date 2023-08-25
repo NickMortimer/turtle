@@ -1,6 +1,4 @@
 import doit
-from doit import get_var
-from doit.tools import run_once
 from doit import create_after
 import glob
 from numpy import int32

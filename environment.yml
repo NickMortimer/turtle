@@ -16,8 +16,14 @@ dependencies:
   - pyproj
   - geopandas
   - gdal
+  - rasterio
+  - plotly
+  - matplotlib
+  - opencv
+  - python-kaleido
   - pip:
     - pyexiftool
     - cameratransform
+    - doit
 
 
