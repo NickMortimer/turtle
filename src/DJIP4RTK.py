@@ -85,10 +85,11 @@ def task_process_mergpos():
             mrk_file =list(filter(lambda x: '_Timestamp.MRK' in x, dependencies))
             if mrk_file:
                 mrk =read_mrk(mrk_file[0])
-                mrk['Easting'],mrk['Northing'] =utmproj(mrk['Longitude'].values,mrk['Latitude'].values)
-                mrk['EllipsoideHight'] = pd.to_numeric(mrk.EllipsoideHight.str.split(',',expand=True)[0])
-                mrk =mrk.add_suffix('Mrk')
-                drone =drone.join(mrk[['UTCTimeMrk','EllipsoideHightMrk','LatitudeMrk','LongitudeMrk','EastingMrk','NorthingMrk']],rsuffix='Mrk')
+                if len(mrk)>0:
+                    mrk['Easting'],mrk['Northing'] =utmproj(mrk['Longitude'].values,mrk['Latitude'].values)
+                    mrk['EllipsoideHight'] = pd.to_numeric(mrk.EllipsoideHight.str.split(',',expand=True)[0])
+                    mrk =mrk.add_suffix('Mrk')
+                    drone =drone.join(mrk[['UTCTimeMrk','EllipsoideHightMrk','LatitudeMrk','LongitudeMrk','EastingMrk','NorthingMrk']],rsuffix='Mrk')
             rtk_file=list(filter(lambda x: '_Timestamp.CSV' in x, dependencies))
             if rtk_file:
                 rtk =pd.read_csv(rtk_file[0],parse_dates=['GPST'],index_col=['Sequence'])
@@ -105,8 +106,8 @@ def task_process_mergpos():
             source = os.path.dirname(item)
             file_dep  =  list(filter(lambda x:  any(f in x for f in ['exif.csv','Timestamp']), glob.glob(os.path.join(source,'*.*'))))
             fild_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
-            if file_dep:
-                target =   os.path.join(source,'position.csv')           
+            target =   os.path.join(source,'position.csv')   
+            if list(filter(lambda x: 'exif.csv' in x,file_dep)):        
                 yield {
                     'name':source,
                     'actions':[process_json],
@@ -118,13 +119,17 @@ def task_process_mergpos():
 def task_addpolygons():
     def process_polygons(dependencies, targets,dewarp):
         def getpoly(item):
+            if item.DewarpFlag:
+                drone =P4rtk(cal,crs)
+            else:
+                drone =P4rtk(dewarp,crs)
             drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
-                                  (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree)
+                                  (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree+90)
             return drone.getimagepolygon()
         data = pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
         crs = f'epsg:{int(data["UtmCode"][0])}'
         gdf = gp.GeoDataFrame(data, geometry=gp.points_from_xy(data.Easting, data.Northing),crs=crs)
-        drone =P4rtk(dewarp,crs)
+        
         gdf['ImagePolygon'] = gdf.apply(getpoly,axis=1)
         gdf.to_csv(targets[0])
         
@@ -132,6 +137,7 @@ def task_addpolygons():
         
 
     dewarp = pd.to_numeric(config.cfg['survey']['dewarp'] )
+    cal = pd.to_numeric(config.cfg['survey']['calibration'] )
     for file_dep in glob.glob(os.path.join(config.geturl('imagesource'),'position.csv'),recursive=True):
         target = file_dep.replace('position.csv','polygons.csv')   
         yield {
@@ -149,6 +155,7 @@ def task_merge_xif():
             drone = pd.concat([pd.read_csv(file,index_col='TimeStamp',parse_dates=['TimeStamp']) 
                             for file in list(dependencies)]) 
             drone.sort_index(inplace=True)
+            drone = drone[~drone.LatitudeMrk.isna()]
             drone.to_csv(list(targets)[0],index=True)
             
         searchpath = os.path.join(config.geturl('imagesource'),'polygons.csv')

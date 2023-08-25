@@ -87,18 +87,7 @@ def UTCFromGps(gpsWeek, SOW, leapSecs=16):
     return (year, month, day, hh, mm, ss + secFract) 
 
 
-def get_base(date,station='EXMT00AUS',host='ftp://',destination='T:/drone/raw/gnss/'):
-    for stamp in date:
-        doy =pd.to_datetime(stamp).dayofyear
-        year =pd.to_datetime(stamp).year
-        file =f'{station}_R_{year}{doy:03d}0000_01D_30S_MO.crx.gz'
-        gnss = f'{destination}{file}'
-        if not os.path.exists(gnss):
-            gFile = open(gnss, "wb")
-            with ftplib.FTP('ftp.data.gnss.ga.gov.au',user='anonymous') as ftp:
-                url = f'/daily/{year}/{doy:03d}/{file}'
-                ftp.retrbinary(f'RETR {url}', gFile.write)
-            gFile.close()
+
 
 def read_mrk(filename,leapseconds=37,index='Sequence'):
     names=['Sequence','GPSSecondOfWeek','GPSWeekNumber','NorthOff','EastOff','VelOff','Latitude','Longitude','EllipsoideHight','Error','RTKFlag']
@@ -140,6 +129,19 @@ def imagenames(filename):
     data.set_index('Sequence',inplace=True)
     return data
 
+
+def get_base(date,station='EXMT00AUS',host='ftp://',destination='T:/drone/raw/gnss/'):
+    for stamp in date:
+        doy =pd.to_datetime(stamp).dayofyear
+        year =pd.to_datetime(stamp).year
+        file =f'{station}_R_{year}{doy:03d}0000_01D_30S_MO.crx.gz'
+        gnss = f'{destination}{file}'
+        if not os.path.exists(gnss):
+            gFile = open(gnss, "wb")
+            with ftplib.FTP('ftp.data.gnss.ga.gov.au',user='anonymous') as ftp:
+                url = f'/daily/{year}/{doy:03d}/{file}'
+                ftp.retrbinary(f'RETR {url}', gFile.write)
+            gFile.close()
 # filename = r"T:/drone/raw/card0/SURVEY/100_0001/100_0001_Timestamp.MRK"
 # inputpath =os.path.split(filename)[0]
 # jsonfile = inputpath+'/exif.json'

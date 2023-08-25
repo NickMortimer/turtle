@@ -13,10 +13,11 @@ import plotly
 import plotly.express as px
 import geopandas as gp
 import shapely.wkt
-from shapely.geometry import MultiPoint
+from shapely.geometry import MultiPolygon
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 import config
+import shutil
 
 
 # config = {"config": get_var('config', 'NO')}
@@ -141,8 +142,12 @@ def task_geopgk_survey():
         if "UtmCode" in data.columns:
             crs = f'epsg:{int(data["UtmCode"][0])}'
             survey = data['SurveyId'][0]
-            gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
-            gdf.to_file(targets[0], layer=survey, driver="GPKG")
+            gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(lambda x: shapely.wkt.loads(x)),crs=crs)
+
+            if os.path.exists(targets[0]):
+                os.remove(targets[0])
+            gdf.loc[(gdf.GimbalPitchDegree*-1)>80].to_file(targets[0], driver="GPKG", layer=survey)                
+#            gdf.to_file(targets[0], driver="GPKG", layer=survey)
 
         
     file_dep = glob.glob(os.path.join(config.geturl('output'),config.cfg['survey']['country'],'**','*_survey_area_data.csv'),recursive=True)

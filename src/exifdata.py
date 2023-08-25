@@ -52,6 +52,7 @@ def task_create_json():
 #                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
                         'clean':True,
                     }
+ 
     
 @create_after(executed='create_json', target_regex='.*\exif.json')    
 def task_process_json():
@@ -93,31 +94,7 @@ def task_process_json():
             }
             
 
-# @create_after(executed='process_json', target_regex='.*\exif.csv') 
-# def task_merge_xif():
-#         def process_xif(dependencies, targets):
-#             target = list(targets)[0]
-#             os.makedirs(os.path.dirname(target),exist_ok=True)
-#             drone = pd.concat([pd.read_csv(file,index_col='TimeStamp',parse_dates=['TimeStamp']) 
-#                             for file in list(dependencies)]) 
-#             drone.sort_index(inplace=True)
-#             drone.to_csv(list(targets)[0],index=True)
-            
-#         config = {"config": get_var('config', 'NO')}
-#         with open(config['config'], 'r') as ymlfile:
-#             cfg = yaml.load(ymlfile, yaml.SafeLoader)
-#         basepath = os.path.dirname(config['config'])
-#         searchpath = os.path.join(basepath,os.path.dirname(cfg['paths']['imagesource']),'exif.csv')
-#         file_dep = glob.glob(searchpath,recursive=True)
-#         processpath =os.path.join(basepath,cfg['paths']['process'])
-#         os.makedirs(processpath,exist_ok=True)
-#         target = os.path.join(processpath,'mergedxif.csv')
-#         return {
-#             'actions':[process_xif],
-#             'file_dep':file_dep,
-#             'targets':[target],
-#             'clean':True,
-#         }
+
             
             
            

@@ -18,7 +18,7 @@ import shutil
 import shapely.wkt
 from shapely.geometry import MultiPoint
 from geopandas.tools import sjoin
-from doit.task import clean_targets
+from doit.task import clean_targets     
 import config
 
  
@@ -49,7 +49,7 @@ def task_make_surveys():
                 'clean': [clean_targets, clean],
             } 
             
-@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')             
+#@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')             
 def task_calculate_survey_areas():
     def poly_to_points(polygon):
         return np.dstack(polygon.exterior.coords.xy)
@@ -155,7 +155,29 @@ def task_move_summary():
             'targets':[target],
             'uptodate': [True],
             'clean':True,
-        }                         
+        }  
+
+def task_make_geo():
+    def make_geo(dependencies, targets):
+        data = pd.read_csv(dependencies[0])
+        text = list(data.apply(lambda x:f'{x.NewName}   {x.LongitudeMrk}   {x.LatitudeMrk}    {x.EllipsoideHightMrk} {x.CameraYaw} {x.CameraPitch} {x.CameraRoll}\n\r',axis=1))
+        if 'LatitudeMrk' in data.columns:
+            with open(targets[0], 'a') as f:
+                f.write('EPSG:4326\n\r')
+                f.writelines(text)
+        
+    
+    file_dep = glob.glob(os.path.join(config.geturl('output'),'**','*_survey_area_data.csv'),recursive=True)
+    for file in file_dep:
+        target = os.path.join(config.getdest(os.path.basename(file)),'geo.txt')
+        yield {
+            'name':file,
+            'actions':[make_geo],
+            'file_dep':[file],
+            'targets':[target],
+            'uptodate': [True],
+            'clean':True,
+        }                                
             
 
 

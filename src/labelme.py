@@ -36,7 +36,7 @@ from shapely.geometry import MultiPoint
 def task_set_up():
     config.read_config()
 
-# def task_strip_image():
+# # def task_strip_image():
 #     def strip_image(file):
 #         try:
 #             with open(file, "r") as read_file:
@@ -57,19 +57,19 @@ def task_set_up():
 #          output = pd.DataFrame.from_records([strip_image(file) for file in dependencies])
 #          output.to_csv(targets[0])
 
-#     for item in glob.glob(os.path.join(config.geturl('labelmesource')),recursive=True):
-#             file_dep = glob.glob(os.path.join(os.path.dirname(item),'*.json'))
-#             if file_dep:
-#                 target =   os.path.join(os.path.dirname(item),'stripImage.csv')           
-#                 yield {
-#                     'name':item,
-#                     'file_dep': file_dep,
-#                     'actions':[process_json],
-#                     'targets':[target],
-#                     'clean':True,
-#                     'uptodate':[True],
+# #     for item in glob.glob(os.path.join(config.geturl('labelmesource')),recursive=True):
+# #             file_dep = glob.glob(os.path.join(os.path.dirname(item),'*.json'))
+# #             if file_dep:
+# #                 target =   os.path.join(os.path.dirname(item),'stripImage.csv')           
+# #                 yield {
+# #                     'name':item,
+# #                     'file_dep': file_dep,
+# #                     'actions':[process_json],
+# #                     'targets':[target],
+# #                     'clean':True,
+# #                     'uptodate':[True],
                     
-#                 }
+# #                 }
 
 
 # def task_merge_strip():
@@ -109,8 +109,8 @@ def task_set_up():
 #             'clean':True,
 #             'uptodate':[run_once],
             
-#  
-# 
+ 
+
 #        }
 
 
@@ -491,17 +491,17 @@ def task_calculate_positions():
     def process_positions(dependencies, targets):
         def calcRealworld(item):
             #-14.772 hieght at Exmouth
-            localdrone = P4rtk(data,crs)
+            localdrone = P4rtk(cal,crs)
 
             if 'Eastingrtk' in item and not np.isnan(item.Eastingrtk):
-                localdrone.setdronepos(item.Eastingrtk,item.Northingrtk,item.EllipsoideHight+14.772,
-                                (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,-item.GimbalYawDegree+8) #item.GimbalPitchDegree-90,item.GimbalRollDegree,-item.GimbalYawDegree
+                localdrone.setdronepos(item.Eastingrtk,item.Northingrtk,item.RelativeAltitude, #item.EllipsoideHight+20,
+                                (90+item.GimbalPitchDegree),item.GimbalRollDegree,item.GimbalYawDegree) #item.GimbalPitchDegree-90,item.GimbalRollDegree,-item.GimbalYawDegree
             elif  'EastingMrk' in item and not np.isnan(item.EastingMrk):
                 localdrone.setdronepos(item.EastingMrk,item.NorthingMrk,item.RelativeAltitude,
-                                (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,-item.GimbalYawDegree+8)
+                                (90+item.GimbalPitchDegree),item.GimbalRollDegree,item.GimbalYawDegree)
             else:
                 localdrone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
-                                (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,-item.GimbalYawDegree+8) #item.GimbalPitchDegree-90,item.GimbalRollDegree,-item.GimbalYawDegree
+                                (90+item.GimbalPitchDegree),item.GimbalRollDegree,item.GimbalYawDegree) #item.GimbalPitchDegree-90,item.GimbalRollDegree,-item.GimbalYawDegree
                 
             pos=localdrone.cameratorealworld(item.DewarpX,item.DewarpY)
             item.EastingPntD = pos[0]
@@ -518,7 +518,7 @@ def task_calculate_positions():
             drone.points = drone.points.apply(ast.literal_eval)
             data = np.array([3706.080000000000,3692.930000000000,-34.370000000000,-34.720000000000,-0.271104000000,0.116514000000,0.001092580000,0.000348025000,-0.040583200000])
             crs = f'epsg:{int(drone["UtmCode"].min())}'
-            p4rtk = P4rtk(data,crs)
+            p4rtk = P4rtk(cal,crs)
             drone = drone[drone.points.apply(len)>0]
             #drone[['PointEasting','PontNorthing']]=drone.apply(process_row,axis=1,result_type='expand')
             jpegpoints = np.array(drone.points.apply(lambda x:x[0]).tolist())
@@ -530,7 +530,8 @@ def task_calculate_positions():
                 drone.loc[~drone['EllipsoideHight'].isna(),'EllipsoideHight']= pd.to_numeric(drone.loc[~drone['EllipsoideHight'].isna(),'EllipsoideHight'].str.split(',',expand=True)[0])
             drone = drone.apply(calcRealworld,axis=1)
         drone.to_csv(targets[0],index=False) 
-
+    dewarp = pd.to_numeric(config.cfg['survey']['dewarp'] )
+    cal = pd.to_numeric(config.cfg['survey']['calibration'] )
     file_dep =  glob.glob(os.path.join(config.geturl('output'),'**/*labelme_merge.csv'),recursive=True)
     for item in file_dep:
         target =item.replace("merge.csv","merge_points.csv")
@@ -543,7 +544,7 @@ def task_calculate_positions():
         }   
 
 @create_after(executed='calculate_positions')  
-def task_process_turtles():
+def task_process_gcp():
     def process_turtles(dependencies, targets):
         def count_turtle(grp):
             clustering = MeanShift(bandwidth=10).fit(np.dstack([grp.EastingPntD.values,grp.NorthingPntD.values])[0])
@@ -562,7 +563,7 @@ def task_process_turtles():
         plotpath =os.path.dirname(targets[0])
         drone =pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
         # ["dolphin","fish_school","gcp","mammal","ray","shark","turtle_deep","turtle_diving","turtle_jbs","turtle_surface","turtle_tracks"]
-        drone = drone[drone.label.isin(["turtle_diving","turtle_jbs","turtle_surface"])]
+        drone = drone[drone.label.isin(["gcp"])]
         if len(drone)>0:
             drone['ImagePolygon']=drone.ImagePolygon.apply(shapely.wkt.loads)
             drone.sort_values('TimeStamp',inplace=True)
@@ -591,195 +592,246 @@ def task_process_turtles():
             'file_dep':[item],
             'targets':[target],
             'clean':True,
-        }   
+        }          
+
+# @create_after(executed='calculate_positions')  
+# def task_process_turtles():
+#     def process_turtles(dependencies, targets):
+#         def count_turtle(grp):
+#             clustering = MeanShift(bandwidth=10).fit(np.dstack([grp.EastingPntD.values,grp.NorthingPntD.values])[0])
+#             n_clusters_ = len(clustering.cluster_centers_)
+#             fig,ax = plt.subplots(figsize=(8,8))
+#             for index,row in grp.iterrows():
+#                 (x,y)=row.ImagePolygon.exterior.xy
+#                 ax.plot(x, y, color='#6699cc', alpha=0.7,
+#                     linewidth=3, solid_capstyle='round', zorder=2)
+#                 ax.plot(row.EastingPntD,row.NorthingPntD,marker ='x',linestyle='')
+#             ax.set_aspect(1)
+#             plt.scatter(clustering.cluster_centers_[:, 0], clustering.cluster_centers_[:, 1], c='red', s=50);
+#             plt.savefig(os.path.join(plotpath,f'group_plot_{grp.groups.min()}'))
+#             plt.close()
+#             return {'count':n_clusters_,'centers':clustering.cluster_centers_}
+#         plotpath =os.path.dirname(targets[0])
+#         drone =pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
+#         # ["dolphin","fish_school","gcp","mammal","ray","shark","turtle_deep","turtle_diving","turtle_jbs","turtle_surface","turtle_tracks"]
+#         drone = drone[drone.label.isin(["turtle_diving","turtle_jbs","turtle_surface"])]
+#         if len(drone)>0:
+#             drone['ImagePolygon']=drone.ImagePolygon.apply(shapely.wkt.loads)
+#             drone.sort_values('TimeStamp',inplace=True)
+#             drone['groups']=0
+#             drone.loc[abs(drone.TimeStamp.diff().dt.total_seconds())>12,'groups']=1
+#             drone['groups']=drone['groups'].cumsum()
+#             tcounts =pd.DataFrame(drone.groupby('groups').apply(count_turtle),columns=['turtle_count'])
+#             counts=tcounts.turtle_count.apply(lambda x:x['count']).reset_index()     
+#             centers =tcounts.turtle_count.apply(lambda x:x['centers']).reset_index()   
+#             centers.name= 'centers'
+#             counts.name = 'counts'
+#             output1 =pd.merge(drone,counts,on=['groups'])
+#             output1 =pd.merge(output1,centers,on=['groups'])
+#             output1.to_csv(targets[0],index=True)
+#         else:
+#             drone.to_csv(targets[0],index=True)
+        
+
+#     file_dep =  glob.glob(os.path.join(config.geturl('output'),'**/*labelme_merge_points.csv'),recursive=True)
+#     file_dep =list(filter(lambda x:os.stat(x).st_size > 100,file_dep))
+#     for item in file_dep:
+#         target =item.replace("points.csv","points_grouped.csv")
+#         yield {
+#             'name':target,
+#             'actions':[process_turtles],
+#             'file_dep':[item],
+#             'targets':[target],
+#             'clean':True,
+#         }   
 
 
-@create_after(executed='process_turtles') 
-def task_process_turtles_totals():
-    def from_np_array(array_string):
-        array_string = ','.join(array_string.replace('[ ', '[').split())
-        return np.array(ast.literal_eval(array_string))
+# # @create_after(executed='process_turtles') 
+# # def task_process_turtles_totals():
+# #     def from_np_array(array_string):
+# #         array_string = ','.join(array_string.replace('[ ', '[').split())
+# #         return np.array(ast.literal_eval(array_string))
     
-    def process_turtles_totals(dependencies, targets):
-        def process_sruvey(grp):
-            crs = f'epsg:{int(grp["UtmCode"].min())}'
-            utmproj =Proj(crs)
-            points = np.vstack(grp.turtle_count_y)
-            data =pd.DataFrame(points,columns=['Easting','Norting'])
-            data['Longitude'],data['Latitude']=utmproj(points[:,0],points[:,1],inverse=True)
-            data['SurveyId'] = grp['SurveyId'].min()
-            return data
+# #     def process_turtles_totals(dependencies, targets):
+# #         def process_sruvey(grp):
+# #             crs = f'epsg:{int(grp["UtmCode"].min())}'
+# #             utmproj =Proj(crs)
+# #             points = np.vstack(grp.turtle_count_y)
+# #             data =pd.DataFrame(points,columns=['Easting','Norting'])
+# #             data['Longitude'],data['Latitude']=utmproj(points[:,0],points[:,1],inverse=True)
+# #             data['SurveyId'] = grp['SurveyId'].min()
+# #             return data
 
-        drone =pd.read_csv(dependencies[0],parse_dates=['TimeStamp'],converters={'turtle_count_y': from_np_array})
-        if len(drone)>0:
-            drone = drone[drone.label.isin(['turtle_surface','turtle_jbs'])]
-            turtles =drone.groupby('groups').first().groupby('SurveyId').apply(process_sruvey)
-            turtles.to_csv(targets[0],index=False)
-        else:
-            with open(targets[0], "w") as outfile:
-                outfile.write("Easting,Norting,Longitude,Latitude,SurveyId\n") 
+# #         drone =pd.read_csv(dependencies[0],parse_dates=['TimeStamp'],converters={'turtle_count_y': from_np_array})
+# #         if len(drone)>0:
+# #             drone = drone[drone.label.isin(['turtle_surface','turtle_jbs'])]
+# #             turtles =drone.groupby('groups').first().groupby('SurveyId').apply(process_sruvey)
+# #             turtles.to_csv(targets[0],index=False)
+# #         else:
+# #             with open(targets[0], "w") as outfile:
+# #                 outfile.write("Easting,Norting,Longitude,Latitude,SurveyId\n") 
                    
 
-    file_dep =  glob.glob(os.path.join(config.geturl('output'),'**/*points_grouped.csv'),recursive=True)
-    for item in file_dep:
-        target =item.replace("grouped.csv","grouped_turtle.csv")
-        yield {
-            'name':target,
-            'actions':[process_turtles_totals],
-            'file_dep':[item],
-            'targets':[target],
-            'clean':True,
-        }   
-@create_after(executed='process_turtles_totals')             
-def task_merge_turtle_totals():
-    def process_merge(dependencies, targets):
-        totals = pd.concat([pd.read_csv(file) for file in dependencies])
-        totals.to_csv(targets[0],index=False)
-    file_dep =  glob.glob(os.path.join(config.geturl('output'),'**/*points_grouped_turtle.csv'),recursive=True)
-    target =os.path.join(config.geturl('process'),'turtles_totals.csv')
-    return {
-        'actions':[process_merge],
-        'file_dep':file_dep,
-        'targets':[target],
-        'clean':True,
-    }  
+# #     file_dep =  glob.glob(os.path.join(config.geturl('output'),'**/*points_grouped.csv'),recursive=True)
+# #     for item in file_dep:
+# #         target =item.replace("grouped.csv","grouped_turtle.csv")
+# #         yield {
+# #             'name':target,
+# #             'actions':[process_turtles_totals],
+# #             'file_dep':[item],
+# #             'targets':[target],
+# #             'clean':True,
+# #         }   
+# # @create_after(executed='process_turtles_totals')             
+# # def task_merge_turtle_totals():
+# #     def process_merge(dependencies, targets):
+# #         totals = pd.concat([pd.read_csv(file) for file in dependencies])
+# #         totals.to_csv(targets[0],index=False)
+# #     file_dep =  glob.glob(os.path.join(config.geturl('output'),'**/*points_grouped_turtle.csv'),recursive=True)
+# #     target =os.path.join(config.geturl('process'),'turtles_totals.csv')
+# #     return {
+# #         'actions':[process_merge],
+# #         'file_dep':file_dep,
+# #         'targets':[target],
+# #         'clean':True,
+# #     }  
 
-def task_plot_turtles():
-        def process_survey(dependencies, targets,apikey):
-            drone =pd.read_csv(list(dependencies)[0])
+# # def task_plot_turtles():
+# #         def process_survey(dependencies, targets,apikey):
+# #             drone =pd.read_csv(list(dependencies)[0])
             
-            px.set_mapbox_access_token(apikey)
-            fig = px.scatter_mapbox(drone, hover_name='SurveyId', lat="Latitude", lon="Longitude",  
-                                    mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=10)
-            fig.update_layout(mapbox_style="satellite-streets")
-            plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
+# #             px.set_mapbox_access_token(apikey)
+# #             fig = px.scatter_mapbox(drone, hover_name='SurveyId', lat="Latitude", lon="Longitude",  
+# #                                     mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=10)
+# #             fig.update_layout(mapbox_style="satellite-streets")
+# #             plotly.offline.plot(fig, filename=list(targets)[0],auto_open = False)
             
 
-        file_dep =os.path.join(config.geturl('process'),'turtles_totals.csv')
-        targets = os.path.join(config.geturl('process'),'turtles_totals.html')
-        return {
+# #         file_dep =os.path.join(config.geturl('process'),'turtles_totals.csv')
+# #         targets = os.path.join(config.geturl('process'),'turtles_totals.html')
+# #         return {
 
-            'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
-            'file_dep':[file_dep],
-            'targets':[targets],
-            'clean':True,
-        }   
+# #             'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
+# #             'file_dep':[file_dep],
+# #             'targets':[targets],
+# #             'clean':True,
+# #         }   
 
 
-def task_plot_each_survey():
-    def process_survey(dependencies, targets,apikey):
-        drone =pd.read_csv(list(dependencies)[0])
-        px.set_mapbox_access_token(apikey)
-        if len(drone)>2:
-            max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
-            if max_bound>0:
-                zoom = 13.5 - np.log(max_bound)
-            else:
-                zoom = 13.5
-        else:
-            zoom =14
+# # def task_plot_each_survey():
+# #     def process_survey(dependencies, targets,apikey):
+# #         drone =pd.read_csv(list(dependencies)[0])
+# #         px.set_mapbox_access_token(apikey)
+# #         if len(drone)>2:
+# #             max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
+# #             if max_bound>0:
+# #                 zoom = 13.5 - np.log(max_bound)
+# #             else:
+# #                 zoom = 13.5
+# #         else:
+# #             zoom =14
 
-        fig = px.scatter_mapbox(drone, lat="Latitude", lon="Longitude",  
-                                mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=zoom)        
-        fig.update_layout(mapbox_style="satellite-streets",autosize=False)
-        html_file =list(filter(lambda x: 'html' in x, targets))[0]
-        png_file =list(filter(lambda x: 'png' in x, targets))[0]
-        plotly.offline.plot(fig, filename=html_file,auto_open = False)
-        fig.update_layout(coloraxis_showscale=False,showlegend=False,autosize=False,margin = dict(t=10, l=10, r=10, b=10))
-        fig.write_image(png_file)
+# #         fig = px.scatter_mapbox(drone, lat="Latitude", lon="Longitude",  
+# #                                 mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=zoom)        
+# #         fig.update_layout(mapbox_style="satellite-streets",autosize=False)
+# #         html_file =list(filter(lambda x: 'html' in x, targets))[0]
+# #         png_file =list(filter(lambda x: 'png' in x, targets))[0]
+# #         plotly.offline.plot(fig, filename=html_file,auto_open = False)
+# #         fig.update_layout(coloraxis_showscale=False,showlegend=False,autosize=False,margin = dict(t=10, l=10, r=10, b=10))
+# #         fig.write_image(png_file)
         
         
-    file_dep = glob.glob(os.path.join(config.geturl('output'),'**/*points_grouped_turtle.csv'),recursive=True)
-    for item in file_dep:
-        target = [item.replace('csv','png'),item.replace('csv','html')]
-        yield {
-            'name':target[0],
-            'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
-            'file_dep':[item],
-            'targets':target,
-            'clean':True,
-        }   
+# #     file_dep = glob.glob(os.path.join(config.geturl('output'),'**/*points_grouped_turtle.csv'),recursive=True)
+# #     for item in file_dep:
+# #         target = [item.replace('csv','png'),item.replace('csv','html')]
+# #         yield {
+# #             'name':target[0],
+# #             'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
+# #             'file_dep':[item],
+# #             'targets':target,
+# #             'clean':True,
+# #         }   
 
-# def task_process_areas():
-#     def process_area(dependencies, targets):
-#         totals = pd.concat([pd.read_csv(file) for file in dependencies])
-#         output = totals.groupby('SurveyId').first()
-#         output.to_csv(targets[0],index=False)
-#     file_dep =  glob.glob(os.path.join(config.geturl('output'),'**/**_survey_area_data*.csv'),recursive=True)
-#     targets = os.path.join(config.geturl('process'),'areas.csv')
-#     return {
+# # def task_process_areas():
+# #     def process_area(dependencies, targets):
+# #         totals = pd.concat([pd.read_csv(file) for file in dependencies])
+# #         output = totals.groupby('SurveyId').first()
+# #         output.to_csv(targets[0],index=False)
+# #     file_dep =  glob.glob(os.path.join(config.geturl('output'),'**/**_survey_area_data*.csv'),recursive=True)
+# #     targets = os.path.join(config.geturl('process'),'areas.csv')
+# #     return {
 
-#         'actions':[process_area],
-#         'file_dep':file_dep,
-#         'targets':[targets],
-#         'clean':True,
-#     } 
+# #         'actions':[process_area],
+# #         'file_dep':file_dep,
+# #         'targets':[targets],
+# #         'clean':True,
+# #     } 
 
-def task_plot_surveys():
-    def process_survey(dependencies, targets,apikey):
-        drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-        drone = drone[drone.Longitude>0]
-        px.set_mapbox_access_token(apikey)
-        max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
-        zoom = 11.5 - np.log(max_bound)
-        fig = px.scatter_mapbox(drone, hover_name='SurveyId', lat="Latitude", lon="Longitude",  
-                                mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=zoom)
-        fig.update_layout(mapbox_style="satellite-streets")
-        os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
-        html_file =list(filter(lambda x: 'html' in x, targets))[0]
-        png_file =list(filter(lambda x: 'png' in x, targets))[0]
-        plotly.offline.plot(fig, filename=html_file,auto_open = False)
-        fig.write_image(png_file)
-    file_dep = os.path.join(config.geturl('process'),'surveyswitharea.csv')
-    targets = [os.path.join(config.geturl('reports'),'surveys.html'),
-               os.path.join(config.geturl('reports'),'surveys.png')]
+# def task_plot_surveys():
+#     def process_survey(dependencies, targets,apikey):
+#         drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+#         drone = drone[drone.Longitude>0]
+#         px.set_mapbox_access_token(apikey)
+#         max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
+#         zoom = 11.5 - np.log(max_bound)
+#         fig = px.scatter_mapbox(drone, hover_name='SurveyId', lat="Latitude", lon="Longitude",  
+#                                 mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=zoom)
+#         fig.update_layout(mapbox_style="satellite-streets")
+#         os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
+#         html_file =list(filter(lambda x: 'html' in x, targets))[0]
+#         png_file =list(filter(lambda x: 'png' in x, targets))[0]
+#         plotly.offline.plot(fig, filename=html_file,auto_open = False)
+#         fig.write_image(png_file)
+#     file_dep = os.path.join(config.geturl('process'),'surveyswitharea.csv')
+#     targets = [os.path.join(config.geturl('reports'),'surveys.html'),
+#                os.path.join(config.geturl('reports'),'surveys.png')]
 
 
-    file_dep =  glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**/*points_grouped.csv'),recursive=True)
-    for item in file_dep:
-        target =item.replace("grouped.csv","grouped_turtle.csv")          
-        yield {
+#     file_dep =  glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**/*points_grouped.csv'),recursive=True)
+#     for item in file_dep:
+#         target =item.replace("grouped.csv","grouped_turtle.csv")          
+#         yield {
 
-            'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
-            'file_dep':[file_dep],
-            'targets':targets,
-            'clean':True,
-        } 
+#             'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
+#             'file_dep':[file_dep],
+#             'targets':targets,
+#             'clean':True,
+#         } 
 
         
-def task_turtles_report():
-        def process_survey(dependencies, targets):
+# def task_turtles_report():
+#         def process_survey(dependencies, targets):
 
 
 
-            turte_file = pd.read_csv(list(filter(lambda x: 'turtles_totals' in x, dependencies))[0])
+#             turte_file = pd.read_csv(list(filter(lambda x: 'turtles_totals' in x, dependencies))[0])
 
 
 
-            turte_file['TotalTurtles'] =0
-            turtle = turte_file.groupby('SurveyId').count().reset_index(-1)
-            turtle.SurveyId =turtle.SurveyId.apply(lambda x: x.replace('AU_',''))
-            counts = turtle[['SurveyId','TotalTurtles']]
-            image_area = pd.read_csv(list(filter(lambda x: 'areas.csv' in x, dependencies))[0],index_col='SurveyId')
-            #image_area['SurveyId'] =image_area.NewName.str.split('_',expand=True)[[3,4]].apply(lambda x :"_".join(x)[:-2],axis=1)
-            #image_area = image_area.groupby('SurveyId').first().reset_index(-1)
-            #image_area = image_area[['SurveyId','SurveyAreaHec']].set_index('SurveyId')
-            counts = counts.set_index('SurveyId')
-            output =image_area.join(counts)
-            output['TurtlesPerHec'] = output['TotalTurtles']/output['Area']
-            output.to_csv(targets[0],index=True)
+#             turte_file['TotalTurtles'] =0
+#             turtle = turte_file.groupby('SurveyId').count().reset_index(-1)
+#             turtle.SurveyId =turtle.SurveyId.apply(lambda x: x.replace('AU_',''))
+#             counts = turtle[['SurveyId','TotalTurtles']]
+#             image_area = pd.read_csv(list(filter(lambda x: 'areas.csv' in x, dependencies))[0],index_col='SurveyId')
+#             #image_area['SurveyId'] =image_area.NewName.str.split('_',expand=True)[[3,4]].apply(lambda x :"_".join(x)[:-2],axis=1)
+#             #image_area = image_area.groupby('SurveyId').first().reset_index(-1)
+#             #image_area = image_area[['SurveyId','SurveyAreaHec']].set_index('SurveyId')
+#             counts = counts.set_index('SurveyId')
+#             output =image_area.join(counts)
+#             output['TurtlesPerHec'] = output['TotalTurtles']/output['Area']
+#             output.to_csv(targets[0],index=True)
 
-        file_dep =[os.path.join(config.geturl('process'),'turtles_totals.csv'),
-                    os.path.join(config.geturl('process'),'areas.csv')]
-        os.makedirs(config.geturl('reports'),exist_ok=True)
-        targets = os.path.join(config.geturl('reports'),'turtles_per_survey.csv')
-        return {
+#         file_dep =[os.path.join(config.geturl('process'),'turtles_totals.csv'),
+#                     os.path.join(config.geturl('process'),'areas.csv')]
+#         os.makedirs(config.geturl('reports'),exist_ok=True)
+#         targets = os.path.join(config.geturl('reports'),'turtles_per_survey.csv')
+#         return {
 
-            'actions':[process_survey],
-            'file_dep':file_dep,
-            'targets':[targets],
-            'clean':True,
-        }          
+#             'actions':[process_survey],
+#             'file_dep':file_dep,
+#             'targets':[targets],
+#             'clean':True,
+#         }          
 
 if __name__ == '__main__':
     import doit

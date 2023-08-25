@@ -76,7 +76,7 @@ def task_assign_area():
                 shapes =gp.GeoDataFrame(pd.concat([load_shape(row) for index,row in areas.iterrows()]))
                 pnts = sjoin(pnts, shapes, how='left')
                 pnts.loc[pnts.id.isna(),'id']=''
-                ids = pnts.groupby('Survey')[['id']].apply(setarea).reset_index(-2)
+                ids = pnts.groupby('Survey')[['id']].apply(setarea)
                 pnts.id = ids.id
                 pnts.loc[pnts.id=='','id'] ='NOAREA'
             except:

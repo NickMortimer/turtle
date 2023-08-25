@@ -118,7 +118,7 @@ class P4rtk:
     def realworld(self,x,y,):
         pass
     
-    def getimagepolygon(self,perside=10):
+    def getimagepolygon(self,perside=10,dewarp=False):
         y = np.linspace(0,self.imageheight,perside)
         x =np.linspace(0,self.imagewidth,perside)
         bottom = np.dstack((x,np.ones(perside)*self.imageheight))[0]
@@ -126,7 +126,8 @@ class P4rtk:
         top = np.dstack((x[::-1],np.zeros(perside)))[0]
         left = np.dstack((np.zeros(perside),y))[0]
         points = np.vstack((bottom,right,top,left))
-        points=self.jpegtoreal(points)
+        if dewarp:
+            points=self.jpegtoreal(points)
         polydata =[self.cameratorealworld(pos[0],pos[1]) for pos in points]
         return gp.GeoSeries(Polygon(polydata),crs=self.crs)
         
