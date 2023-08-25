@@ -3,11 +3,8 @@ import pysftp
 
 from os.path import supports_unicode_filenames
 import pandas as pd
-import numpy as np
-import yaml
 import os
 import glob
-from doit import get_var
 from doit.tools import run_once
 from doit import create_after
 from read_rtk import read_mrk_gpst
