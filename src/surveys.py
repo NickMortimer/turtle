@@ -157,7 +157,7 @@ def task_make_geo():
         if 'LongitudeMrk' in data.columns:
             text = list(data.apply(lambda x:f'{x.NewName}   {x.LongitudeMrk}   {x.LatitudeMrk}    {x.EllipsoideHightMrk} {x.CameraYaw} {x.CameraPitch} {x.CameraRoll}\n\r',axis=1))
         else:
-            text = list(data.apply(lambda x:f'{x.NewName}   {x.Longitude}   {x.Latitude}    {x.RelativeHieght} {x.CameraYaw} {x.CameraPitch} {x.CameraRoll}\n\r',axis=1))
+            text = list(data.apply(lambda x:f'{x.NewName}   {x.Longitude}   {x.Latitude}    {x.RelativeHeight} {x.CameraYaw} {x.CameraPitch} {x.CameraRoll}\n\r',axis=1))
         if 'LatitudeMrk' in data.columns:
             with open(targets[0], 'a') as f:
                 f.write('EPSG:4326\n\r')
