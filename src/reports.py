@@ -146,7 +146,7 @@ def task_geopgk_survey():
 
             if os.path.exists(targets[0]):
                 os.remove(targets[0])
-            gdf.loc[(gdf.GimbalPitchDegree*-1)>80].to_file(targets[0], driver="GPKG", layer=survey)                
+            gdf.loc[(gdf.GimbalPitchDegree*-1)>80].to_file(targets[0], driver="GeoJSON")                
 #            gdf.to_file(targets[0], driver="GPKG", layer=survey)
 
         

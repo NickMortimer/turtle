@@ -9,6 +9,7 @@ from doit.tools import run_once
 from doit import create_after
 import numpy as np
 import config
+from shutil import which
 
 
 
@@ -44,14 +45,24 @@ def task_create_json():
                 filter = os.path.join(item,config.cfg['paths']['imagewild'])
                 file_dep = glob.glob(filter)
                 if file_dep:
-                    yield {
-                        'name':target,
-                        'actions':[f'"{exifpath}" -ext JPG -ext jpg -json "{item}" > "{target}"'],
-                        'targets':[target],
-                        'uptodate':[True],
-#                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
-                        'clean':True,
-                    }
+                    if which('exiftool'):
+                        yield {
+                            'name':os.path.abspath(target),
+                            'actions':[f'exiftool -ext JPG -ext jpg -json "{os.path.abspath(item)}" > "{os.path.abspath(target)}"'],
+                            'targets':[target],
+                            'uptodate':[True],
+    #                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
+                            'clean':True,
+                        }
+                    else:
+                        yield {
+                            'name':os.path.abspath(target),
+                            'actions':[f'"{exifpath}" -ext JPG -ext jpg -json "{os.path.abspath(item)}" > "{os.path.abspath(target)}"'],
+                            'targets':[target],
+                            'uptodate':[True],
+    #                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
+                            'clean':True,
+                        }
  
     
 @create_after(executed='create_json', target_regex='.*\exif.json')    

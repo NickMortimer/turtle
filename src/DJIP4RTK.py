@@ -105,12 +105,12 @@ def task_process_mergpos():
 def task_addpolygons():
     def process_polygons(dependencies, targets,dewarp):
         def getpoly(item):
-            if item.DewarpFlag:
-                drone =P4rtk(cal,crs)
+            if 'DewarpData' in item.keys():
+                drone =P4rtk(pd.to_numeric(item.DewarpData.split(',')[1:]),crs)
             else:
-                drone =P4rtk(dewarp,crs)
+                drone =P4rtk(cal,crs)
             drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
-                                  (90+item.GimbalPitchDegree)*-1,item.GimbalRollDegree,item.GimbalYawDegree+90)
+                                  item.GimbalPitchDegree,item.GimbalRollDegree,item.GimbalYawDegree)
             return drone.getimagepolygon()
         data = pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
         crs = f'epsg:{int(data["UtmCode"][0])}'

@@ -14,8 +14,8 @@ import shapely.wkt
 from shapely.geometry import MultiPoint
 from doit.task import clean_targets     
 import config
-
- 
+from pathlib import Path
+       
     
 def task_make_surveys():
         def process_surveys(dependencies, targets):
@@ -114,9 +114,14 @@ def task_file_images():
             survey = pd.read_csv(dependencies[0])
             for index,row in survey.iterrows():
                 if not os.path.exists(row.FileDest):
+                    source = Path(row.SourceFile)
+                    if not os.path.exists(source):
+                        source =Path(config.CATALOG_DIR) / row.SourceRel 
                     if config.cfg['survey']['outputsymlink']:
-                        relpath = os.path.join(os.path.relpath(os.path.dirname(row.SourceFile),start=os.path.dirname(row.FileDest)),os.path.basename(row.SourceFile))
+                        relpath = os.path.join(os.path.relpath(os.path.dirname(source),start=os.path.dirname(row.FileDest)),os.path.basename(source))
                         os.symlink(relpath, row.FileDest )
+                    elif config.cfg['survey']['outputhardlink']:
+                        os.link(os.path.abspath(source),row.FileDest)
                     else:
                         shutil.copyfile(row.SourceFile,row.FileDest)
             shutil.copyfile(dependencies[0],targets[0])
@@ -133,6 +138,10 @@ def task_file_images():
                 'uptodate': [True],
                 'clean':True,
             } 
+
+
+        
+           
 
 def task_move_summary():
     def move_smmary(dependencies, targets):
@@ -157,7 +166,7 @@ def task_make_geo():
         if 'LongitudeMrk' in data.columns:
             text = list(data.apply(lambda x:f'{x.NewName}   {x.LongitudeMrk}   {x.LatitudeMrk}    {x.EllipsoideHightMrk} {x.CameraYaw} {x.CameraPitch} {x.CameraRoll}\n\r',axis=1))
         else:
-            text = list(data.apply(lambda x:f'{x.NewName}   {x.Longitude}   {x.Latitude}    {x.RelativeHeight} {x.CameraYaw} {x.CameraPitch} {x.CameraRoll}\n\r',axis=1))
+            text = list(data.apply(lambda x:f'{x.NewName}   {x.Longitude}   {x.Latitude}    {x.RelativeAltitude} {x.CameraYaw} {x.CameraPitch} {x.CameraRoll}\n\r',axis=1))
         if 'LatitudeMrk' in data.columns:
             with open(targets[0], 'a') as f:
                 f.write('EPSG:4326\n\r')

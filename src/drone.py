@@ -5,47 +5,34 @@ import cv2
 from shapely.geometry import point
 from shapely.geometry import Polygon
 import geopandas as gp
+import cameratransform as ct
 
 CCDSIZE =0.0132/5472
 class P4rtk:
     def __init__(self,dewarpdata,crs,imagewidth=5472,imageheight=3648,pixelsize=CCDSIZE):
-        self.imagewidth =imagewidth
-        self.imageheight = imageheight
-        self.pixelsize = pixelsize
-        self.crs = crs
-        self.dewarp(dewarpdata)
+        if len(dewarpdata)>4:
+            self.cam = ct.Camera(ct.RectilinearProjection(focallength_x_px=dewarpdata[0],focallength_y_px=dewarpdata[1],
+                                                          center_x_px=imagewidth/2 -dewarpdata[2],center_y_px =imageheight/2 -dewarpdata[3]))
+            #self.cam = ct.Camera(ct.RectilinearProjection(focallength_px=dewarpdata[0],focallength_px=dewarpdata[1]))
+            self.imagewidth =imagewidth
+            self.imageheight = imageheight
+            self.pixelsize = pixelsize
+            self.crs = crs
+            self.dewarp(dewarpdata)
+        else:
+            self.cam = ct.Camera(ct.RectilinearProjection(focallength_px=dewarpdata[0],center_x_px=dewarpdata[1],
+                                                center_y_px=dewarpdata[2]))
+            self.imagewidth =imagewidth
+            self.imageheight = imageheight
+            self.pixelsize = pixelsize
+            self.crs = crs
+            self.dewarp(dewarpdata)
         
     def setdronepos(self,easting,northing,altitude,gimblepitch,gimbleroll,gimbleyaw):
-        
-        omga = np.deg2rad(gimblepitch)
-        phi = np.deg2rad(gimbleroll)
-        k = np.deg2rad(gimbleyaw)
-        self.yaw = gimbleyaw
-        self.pitch = omga
-        self.roll = phi
-        self.altitude = altitude / np.cos(omga)
-        rx = np.array([[1.,0,0],
-                       [0,np.cos(omga),-np.sin(omga)],
-                       [0,np.sin(omga),np.cos(omga)]])
-        ry = np.array([[np.cos(phi),0,np.sin(phi)],
-                       [0,1,0],
-                       [-np.sin(phi),0,np.cos(phi)]])
-        rz = np.array([[np.cos(k),-np.sin(k),0],
-                       [np.sin(k),np.cos(k),0],
-                       [0,0,1]])
-        self.R2 = rx.dot(ry).dot(rz)
-        self.Translation = np.array([0,0,-self.altitude])
-        self.R= np.array([[np.cos(k)*np.cos(phi),                                 -np.sin(k)*np.cos(phi),np.sin(phi),0],
-                        [np.cos(k)*np.sin(omga)*np.sin(phi)+np.sin(k)*np.cos(omga),np.cos(k)*np.cos(omga)-np.sin(k)*np.sin(omga)*np.sin(phi),-np.sin(omga)*np.cos(phi),0],
-                        [np.sin(k)*np.sin(omga)-np.cos(k)*np.cos(omga)*np.sin(phi),np.sin(k)*np.cos(omga)*np.sin(phi)+np.cos(k)*np.sin(omga),np.cos(omga)*np.cos(phi),-altitude],
-                        [0,0,0,1]])
-        self.Rinverse = np.linalg.inv(self.R)
+        self.cam.orientation = ct.SpatialOrientation(tilt_deg=gimblepitch+90,elevation_m=altitude,
+                                                     roll_deg=gimbleroll,heading_deg=gimbleyaw)
         self.easting = easting
         self.northing = northing
-
-        self.tocamm =    self.Km @ self.R 
-        self.tocamp =    self.Kp @ self.R
-        
 
     def realwordtocamera(self,easting,northing,evevation=0):
         cam = self.tocamm.dot([easting-self.easting,northing-self.northing,evevation,1])
@@ -89,17 +76,18 @@ class P4rtk:
     #https://github.com/dronemapper-io/dji-dewarp
 
     def dewarp(self,dewarpdata):
-        self.K = np.array([[dewarpdata[0],0,(self.imagewidth/2)-dewarpdata[2]],
-                [0,dewarpdata[1],(self.imageheight/2)-dewarpdata[3]],
-                [0,0,1]])
-        self.Kp = np.array([[dewarpdata[0],0,(self.imagewidth/2)+dewarpdata[2],0],
-                        [0,dewarpdata[1],(self.imageheight/2)+dewarpdata[3],0],
-                        [0,0,1,0]])
-        self.Km = np.array([[dewarpdata[0]*self.pixelsize,0,(self.imagewidth/2+dewarpdata[2])*self.pixelsize,0],
-                        [0,dewarpdata[1]*self.pixelsize,(self.imageheight/2+dewarpdata[3])*self.pixelsize,0],
-                        [0,0,1,0]])
-        self.Kminverse = np.linalg.inv(self.Km[0:3,0:3])
-        self.distCoeffs = np.array(dewarpdata[4:])
+        pass
+        # self.K = np.array([[dewarpdata[0],0,(self.imagewidth/2)-dewarpdata[2]],
+        #         [0,dewarpdata[1],(self.imageheight/2)-dewarpdata[3]],
+        #         [0,0,1]])
+        # self.Kp = np.array([[dewarpdata[0],0,(self.imagewidth/2)+dewarpdata[2],0],
+        #                 [0,dewarpdata[1],(self.imageheight/2)+dewarpdata[3],0],
+        #                 [0,0,1,0]])
+        # self.Km = np.array([[dewarpdata[0]*self.pixelsize,0,(self.imagewidth/2+dewarpdata[2])*self.pixelsize,0],
+        #                 [0,dewarpdata[1]*self.pixelsize,(self.imageheight/2+dewarpdata[3])*self.pixelsize,0],
+        #                 [0,0,1,0]])
+        # self.Kminverse = np.linalg.inv(self.Km[0:3,0:3])
+        # self.distCoeffs = np.array(dewarpdata[4:])
         
     def calculateposition(self,x,y):
         def to_real_wrold(index,altitude,focallen):
@@ -128,7 +116,9 @@ class P4rtk:
         points = np.vstack((bottom,right,top,left))
         if dewarp:
             points=self.jpegtoreal(points)
-        polydata =[self.cameratorealworld(pos[0],pos[1]) for pos in points]
+        polydata =self.cam.spaceFromImage(points)
+        polydata[:,0] =polydata[:,0] + self.easting
+        polydata[:,1] =polydata[:,1] + self.northing
         return gp.GeoSeries(Polygon(polydata),crs=self.crs)
         
     def jpegtoreal(self,points):
