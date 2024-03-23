@@ -25,7 +25,7 @@ wanted ={"SourceFile","FileModifyDate","ImageDescription",
          "CalibratedOpticalCenterX","CalibratedOpticalCenterY","ImageWidth",
          "ImageHeight","GPSAltitude","GPSLatitude","GPSLongitude","CircleOfConfusion",
          "FOV","Latitude",'Longitude','SubSecDateTimeOriginal','FlightYSpeed','FlightXSpeed','FlightYSpeed'
-         'Orientation','ShutterSpeedValue','ApertureValue','WhiteBalance','RtkFlag','DewarpData','DewarpFlag'}
+         'Orientation','ShutterSpeedValue','ApertureValue','WhiteBalance','RtkFlag','DewarpData','DewarpFlag','Model'}
 
  					
 										
@@ -39,16 +39,15 @@ wanted ={"SourceFile","FileModifyDate","ImageDescription",
 
 def task_create_json():
         exifpath = os.path.join(config.geturl('exiftool'))
-        for item in glob.glob(config.geturl('imagesource'),recursive=True):
-            if glob.glob(os.path.join(item,config.cfg['paths']['imagewild'])):
-                target  = os.path.join(item,'exif.json')
-                filter = os.path.join(item,config.cfg['paths']['imagewild'])
-                file_dep = glob.glob(filter)
+        for item in config.geturl('imagesource').rglob('.'):
+            file_dep = list(item.glob(config.cfg['imagewild']))
+            if len(file_dep)>0:
+                target  = item /'exif.json'
                 if file_dep:
                     if which('exiftool'):
                         yield {
-                            'name':os.path.abspath(target),
-                            'actions':[f'exiftool -ext JPG -ext jpg -json "{os.path.abspath(item)}" > "{os.path.abspath(target)}"'],
+                            'name':str(target),
+                            'actions':[f'exiftool -ext JPG -ext jpg -json "{item.resolve()}" > "{target.resolve()}"'],
                             'targets':[target],
                             'uptodate':[True],
     #                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
@@ -56,7 +55,8 @@ def task_create_json():
                         }
                     else:
                         yield {
-                            'name':os.path.abspath(target),
+                             
+                            'name':str(target),+
                             'actions':[f'"{exifpath}" -ext JPG -ext jpg -json "{os.path.abspath(item)}" > "{os.path.abspath(target)}"'],
                             'targets':[target],
                             'uptodate':[True],
@@ -73,29 +73,30 @@ def task_process_json():
             print('output dir is: {0}'.format(list(targets)[0]))
             if os.stat(source_file).st_size > 0:
                 drone = pd.read_json(source_file)
-                def get_longitude(item):
-                    longitude =float(item[0]) + float(item[2][0:-1])/60 + float(item[3][0:-1])/3600
-                    return (longitude)
-                drone['Longitude'] = np.nan
-                drone['Latitude'] = np.nan
-                drone.loc[ ~drone['GPSLongitude'].isna(),'Longitude']=drone.loc[ ~drone['GPSLongitude'].isna(),'GPSLongitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
-                drone.loc[ ~drone['GPSLatitude'].isna(),'Latitude']=drone.loc[ ~drone['GPSLatitude'].isna(),'GPSLatitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
-                drone.loc[drone['GPSLatitudeRef']=='South','Latitude'] =drone.loc[drone['GPSLatitudeRef']=='South','Latitude']*-1
-                drone = drone[drone.columns[drone.columns.isin(wanted)]]
-                if 'SubSecDateTimeOriginal' in drone.columns:
-                    drone['TimeStamp'] = pd.to_datetime(drone.SubSecDateTimeOriginal,format='%Y:%m:%d %H:%M:%S.%f')
-                else:
-                    drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
-                sourcepath = config.CATALOG_DIR
-                drone['SourceRel'] =drone.SourceFile.apply(lambda x: os.path.relpath(x,start=sourcepath))
-                drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d+)\.(jpg|JPG)')['Sequence']
-                drone.set_index('Sequence',inplace=True)
-                drone.to_csv(list(targets)[0],index=True)
+                if 'GPSLongitude' in drone.columns:
+                    def get_longitude(item):
+                        longitude =float(item[0]) + float(item[2][0:-1])/60 + float(item[3][0:-1])/3600
+                        return (longitude)
+                    drone['Longitude'] = np.nan
+                    drone['Latitude'] = np.nan
+                    drone.loc[ ~drone['GPSLongitude'].isna(),'Longitude']=drone.loc[ ~drone['GPSLongitude'].isna(),'GPSLongitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
+                    drone.loc[ ~drone['GPSLatitude'].isna(),'Latitude']=drone.loc[ ~drone['GPSLatitude'].isna(),'GPSLatitude'].str.split(' ',expand=True).apply(get_longitude,axis=1)
+                    drone.loc[drone['GPSLatitudeRef']=='South','Latitude'] =drone.loc[drone['GPSLatitudeRef']=='South','Latitude']*-1
+                    drone = drone[drone.columns[drone.columns.isin(wanted)]]
+                    if 'SubSecDateTimeOriginal' in drone.columns:
+                        drone['TimeStamp'] = pd.to_datetime(drone.SubSecDateTimeOriginal,format='%Y:%m:%d %H:%M:%S.%f')
+                    else:
+                        drone['TimeStamp'] = pd.to_datetime(drone.DateTimeOriginal,format='%Y:%m:%d %H:%M:%S')
+                    sourcepath = config.CATALOG_DIR
+                    drone['SourceRel'] =drone.SourceFile.apply(lambda x: os.path.relpath(x,start=sourcepath))
+                    drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d+)\.(jpg|JPG)')['Sequence']
+                    drone.set_index('Sequence',inplace=True)
+                    drone.to_csv(list(targets)[0],index=True)
             
 
-        for item in glob.glob(os.path.join(config.geturl('imagesource'),'exif.json'),recursive=True):
+        for item in list(config.geturl('imagesource').rglob('exif.json')):
             file_dep  =  item
-            target =   item.replace('json','csv')           
+            target =   item.with_suffix('.csv')           
             yield {
                 'name':target,
                 'actions':[process_json],

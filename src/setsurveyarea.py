@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import geopandas as gp
 from geopandas.tools import sjoin
+from shapely.geometry import MultiPoint
 import config
 from utils import convert_wgs_to_utm
 from doit import create_after
@@ -58,7 +59,7 @@ def task_make_grids():
         target = file.replace('_AOI.shp','_Grid.shp')
         yield {
             'name':target,
-            'actions':[(process_grid,[],{'gridsize':int(config.cfg['survey']['gridsize'])})],
+            'actions':[(process_grid,[],{'gridsize':int(config.cfg['gridsize'])})],
             'file_dep':[file],
             'targets':[target],
             'clean':True,
@@ -76,7 +77,7 @@ def task_detect_surveys():
             drone = drone[~drone.index.duplicated()]
             drone['SourceDrive'] =drone.SourceFile.str.extract(r'^(.*?DCIM)')
             if timedelta == '0MIN':
-                drone['Survey']=drone.groupby('SourceDrive').ngroup()
+                drone=drone.groupby('SourceDrive').ngroup()
             else:
                 drone['Survey']=drone.index
                 drone['Survey']=drone['Survey'].diff()>pd.Timedelta(timedelta)
@@ -97,7 +98,7 @@ def task_detect_surveys():
         file_dep = os.path.join(config.geturl('process'),'imagedata.csv')
         targets = (os.path.join(config.geturl('process'),'surveysummary.csv'),os.path.join(config.geturl('process'),'surveys.csv'))
         return {
-            'actions':[(process_survey, [],{'timedelta':config.cfg['survey']['timedelta'],'maxpitch':config.cfg['survey']['maxpitch']})],
+            'actions':[(process_survey, [],{'timedelta':config.cfg['timedelta'],'maxpitch':config.cfg['maxpitch']})],
             'file_dep':[file_dep],
             'targets':targets,
             'clean':True,
@@ -139,7 +140,7 @@ def task_assign_area():
                 # data['Counter'] = data['Counter'].cumsum()
                 # data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
                 # data['Extension']=data['SourceFile'].apply(lambda x: os.path.splitext(x)[1]).str.upper()
-                # data['NewName']=data.apply(lambda item: f"{cfg['survey']['dronetype']}_{cfg['survey']['cameratype']}_{cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
+                # data['NewName']=data.apply(lambda item: f"{cfg['dronetype']}_{cfg['cameratype']}_{cfg['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
                 # filename = os.path.join(basepath,cfg['paths']['process'],f'{cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv')                
                 # data.to_csv(filename,index=True)
             
@@ -151,7 +152,7 @@ def task_assign_area():
                     os.path.join(config.geturl('process'),'surveyareas.csv')]
         target = os.path.join(config.geturl('process'),'surveyswitharea.csv')
         return {
-            'actions':[(process_assign_area,[],{'countrycode':config.cfg["survey"]["country"]})],
+            'actions':[(process_assign_area,[],{'countrycode':config.cfg["country"]})],
             'file_dep':file_dep,
             'targets':[target],
             'clean':True,

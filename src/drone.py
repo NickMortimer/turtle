@@ -107,15 +107,15 @@ class P4rtk:
         pass
     
     def getimagepolygon(self,perside=10,dewarp=False):
-        y = np.linspace(0,self.imageheight,perside)
-        x =np.linspace(0,self.imagewidth,perside)
-        bottom = np.dstack((x,np.ones(perside)*self.imageheight))[0]
-        right = np.dstack((np.ones(10)*self.imagewidth,y[::-1]))[0]
+        y = np.linspace(0,self.imageheight-1,perside)
+        x =np.linspace(0,self.imagewidth-1,perside)
+        bottom = np.dstack((x,np.ones(perside)*self.imageheight-1))[0]
+        right = np.dstack((np.ones(10)*self.imagewidth-1,y[::-1]))[0]
         top = np.dstack((x[::-1],np.zeros(perside)))[0]
         left = np.dstack((np.zeros(perside),y))[0]
         points = np.vstack((bottom,right,top,left))
-        if dewarp:
-            points=self.jpegtoreal(points)
+        # if dewarp:
+        #     points=self.jpegtoreal(points)
         polydata =self.cam.spaceFromImage(points)
         polydata[:,0] =polydata[:,0] + self.easting
         polydata[:,1] =polydata[:,1] + self.northing

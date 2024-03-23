@@ -25,17 +25,17 @@ def task_make_surveys():
                 data['Counter'] = data['Counter'].cumsum()
                 #data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
                 data['Extension']=data['SourceFile'].apply(lambda x: os.path.splitext(x)[1]).str.upper()
-                data['NewName']=data.apply(lambda item: f"{config.cfg['survey']['dronetype']}_{config.cfg['survey']['cameratype']}_{config.cfg['survey']['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
+                data['NewName']=data.apply(lambda item: f"{config.cfg['dronetype']}_{config.cfg['cameratype']}_{config.cfg['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
                 filename = os.path.join(config.geturl('process'),f"{data['SurveyId'].min()}_survey.csv")                
                 data.to_csv(filename,index=True)
         def clean():
             [os.remove(file) for file in glob.glob(os.path.join(config.geturl('process'),'*_survey.csv'))]
             
-        file_dep = os.path.join(config.geturl('process'),'surveyswitharea.csv')
+        file_dep = config.geturl('process') / 'surveyswitharea.csv'
         if os.path.exists(file_dep):
             surveys =pd.read_csv(file_dep,index_col='TimeStamp',parse_dates=['TimeStamp']).groupby('Survey')
             targets = [os.path.join(config.geturl('process'),
-                                    f'{config.cfg["survey"]["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv') for name,data in surveys]
+                                    f'{config.cfg["country"]}_{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}_survey.csv') for name,data in surveys]
             return {
                 'actions':[(process_surveys,[])],
                 'file_dep':[file_dep],
@@ -66,9 +66,9 @@ def task_calculate_survey_areas():
     def clean():
         [os.remove(file) for file in glob.glob(os.path.join(config.geturl('process'),'*_survey_area.csv'))]
          
-    file_dep = glob.glob(os.path.join(config.geturl('process'),'*_survey.csv'),recursive=True)
+    file_dep = list(config.geturl('process').glob('*_survey.csv'))
     for file in file_dep:
-        target = file.replace('_survey','_survey_area')
+        target = file.parent / file.name.replace('_survey','_survey_area')
         yield {
             'name':file,
             'actions':[calculate_area],
@@ -89,14 +89,14 @@ def task_images_dest():
         def clean():
             [os.remove(file) for file in glob.glob(os.path.join(config.geturl('process'),'*_survey_area_data.csv'))]
             [os.remove(file) for file in glob.glob(os.path.join(config.geturl('process'),'*_survey_area_data_summary.csv'))]
-            survey =f"{config.geturl('output')}/{config.cfg['survey']['country']}"
+            survey =f"{config.geturl('output')}/{config.cfg['country']}"
             if os.path.exists(survey):
                 shutil.rmtree(survey)
             if os.path.exists(config.geturl('reports')):
                 shutil.rmtree(config.geturl('reports'))
-        file_dep = glob.glob(os.path.join(config.geturl('process'),'*_survey_area.csv'))
+        file_dep = list(config.geturl('process').glob('*_survey_area.csv'))
         for file in file_dep:
-            target = file.replace('_survey_area','_survey_area_data')
+            target = file.parent / file.name.replace('_survey_area','_survey_area_data')
             yield {
                 'name':file,
                 'actions':[(process_images, [],{'destination':config.getdest(os.path.basename(file))})],
@@ -116,19 +116,22 @@ def task_file_images():
                 if not os.path.exists(row.FileDest):
                     source = Path(row.SourceFile)
                     if not os.path.exists(source):
-                        source =Path(config.CATALOG_DIR) / row.SourceRel 
-                    if config.cfg['survey']['outputsymlink']:
-                        relpath = os.path.join(os.path.relpath(os.path.dirname(source),start=os.path.dirname(row.FileDest)),os.path.basename(source))
-                        os.symlink(relpath, row.FileDest )
-                    elif config.cfg['survey']['outputhardlink']:
+                        root =config.geturl('imagehead').name
+                        index =source.parts.index(root)
+                        if index>0:
+                            source =config.geturl('imagehead') / Path(*source.parts[index+1:]) 
+                    # if config.cfg['outputsymlink']:
+                    #     relpath = os.path.join(os.path.relpath(os.path.dirname(source),start=os.path.dirname(row.FileDest)),os.path.basename(source))
+                    #     os.symlink(relpath, row.FileDest )
+                    if config.cfg['outputhardlink']:
                         os.link(os.path.abspath(source),row.FileDest)
                     else:
                         shutil.copyfile(row.SourceFile,row.FileDest)
             shutil.copyfile(dependencies[0],targets[0])
             
-        file_dep = glob.glob(os.path.join(config.geturl('process'),'*_survey_area_data.csv'))
+        file_dep = list(config.geturl('process').glob('*_survey_area_data.csv'))
         for file in file_dep:
-            target = os.path.join(config.getdest(os.path.basename(file)),os.path.basename(file))
+            target = config.getdest(file.name) / file.name
             os.path.dirname
             yield {
                 'name':file,

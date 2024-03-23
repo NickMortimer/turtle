@@ -37,6 +37,7 @@ def task_check_survey():
         images['NewName'] = images['Path'].apply(os.path.basename)
         d =drone.join(images.set_index('NewName'),how='left',on=['NewName'],rsuffix="f")
         missing =d.Path.isna().sum()
+        json=len(list(Path(dependencies[0]).parent.glob('*.json')))
         expected = d.NewName.count()
         coverage = 100*(expected-missing)/expected
         df=pd.DataFrame([{'SurveyId':d.SurveyId.max(),
@@ -44,11 +45,11 @@ def task_check_survey():
                         'Latitude':d.Latitude.mean(),'Longitude':d.Longitude.mean(),
                         'Coverage':coverage,'Expected':expected,
                         'Area':d.SurveyAreaHec.mean(),
-                        'Missing':missing}]).to_csv(targets[0],index=False)
-
-    file_dep = glob.glob(os.path.join(config.geturl('process'),'*_survey_area_data.csv'),recursive=True)
+                        'Missing':missing,
+                        'JsonCount':json}]).to_csv(targets[0],index=False)
+    file_dep =  list(config.geturl('output').rglob('*_survey_area_data.csv'))
     for file in file_dep:
-        target = file.replace('_survey_area_data.csv','_survey_area_data_summary.csv')
+        target = file.parent / file.name.replace('_survey_area_data.csv','_survey_area_data_summary.csv')
         yield {
             'name':file,
             'actions':[process_check_survey],
@@ -73,8 +74,8 @@ def task_concat_check_survey():
         surveys =surveys.set_index('SurveyId').sort_index()
         surveys.to_csv(targets[0])
         
-    file_dep = glob.glob(os.path.join(config.geturl('process'),'*_survey_area_data_summary.csv'),recursive=True)
-    target = os.path.join(config.geturl('reports'),'image_coverage.csv')
+    file_dep = list(config.geturl('output').rglob('*_survey_area_data_summary.csv'))
+    target = config.geturl('reports') /'image_coverage.csv'
     return {
         'actions':[process_concat_check_survey],
         'file_dep':file_dep,
@@ -84,7 +85,7 @@ def task_concat_check_survey():
         
 def task_plot_surveys():
     def process_survey(dependencies, targets,apikey):
-        drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+        drone =pd.concat([pd.read_csv(file,index_col='TimeStamp',parse_dates=['TimeStamp']) for file in dependencies])
         drone = drone[drone.Longitude>0]
         px.set_mapbox_access_token(apikey)
         max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
@@ -97,14 +98,14 @@ def task_plot_surveys():
         png_file =list(filter(lambda x: 'png' in x, targets))[0]
         plotly.offline.plot(fig, filename=html_file,auto_open = False)
         fig.write_image(png_file)
-    file_dep = os.path.join(config.geturl('process'),'surveyswitharea.csv')
+    file_dep = list(config.geturl('output').rglob('*_survey_area_data.csv'))
     targets = [os.path.join(config.geturl('reports'),'surveys.html'),
                os.path.join(config.geturl('reports'),'surveys.png')]
                
     return {
 
         'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
-        'file_dep':[file_dep],
+        'file_dep':file_dep,
         'targets':targets,
         'clean':True,
     }  
@@ -125,14 +126,14 @@ def task_plot_each_survey():
         fig.write_image(png_file)
         
         
-    file_dep = glob.glob(os.path.join(config.geturl('process'),'*_survey_area_data.csv'))
-    targets =list(map(lambda x:os.path.join(config.geturl('reports'),os.path.basename(x).replace('csv','html')),file_dep))
-    for inputfile,target in zip(file_dep,targets):
+    file_dep = list(config.geturl('output').rglob('*_survey_area_data.csv'))
+    for inputfile in file_dep:
+        targets = [config.geturl('reports') / inputfile.name.replace('csv','html'), config.geturl('reports') / inputfile.name.replace('csv','png')]
         yield {
-            'name':target,
+            'name':targets[0],
             'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
             'file_dep':[inputfile],
-            'targets':[target,target.replace('html','png')],
+            'targets':targets,
             'clean':True,
         }        
     
@@ -150,7 +151,7 @@ def task_geopgk_survey():
 #            gdf.to_file(targets[0], driver="GPKG", layer=survey)
 
         
-    file_dep = glob.glob(os.path.join(config.geturl('output'),config.cfg['survey']['country'],'**','*_survey_area_data.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(config.geturl('output'),config.cfg['country'],'**','*_survey_area_data.csv'),recursive=True)
     for file in file_dep:
         target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
         target = os.path.join(config.geturl('reports'),target)
@@ -185,10 +186,10 @@ def task_html_report():
 
         
 
-    file_dep = glob.glob(os.path.join(config.cfg['paths']['output'],config.cfg['survey']['country'],'**','*_survey_area_data_summary.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(config.cfg['output'],config.cfg['country'],'**','*_survey_area_data_summary.csv'),recursive=True)
     for file in file_dep:
         target = os.path.splitext(os.path.basename(file))[0]+'_report.html'
-        target = os.path.join(config.cfg['paths']['reports'],target)
+        target = os.path.join(config.cfg['reports'],target)
         #countries_gdf
         yield {
             'name':file,

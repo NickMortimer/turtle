@@ -68,7 +68,7 @@ def task_make_grids():
         target = file.replace('_AOI.shp','_Grid.shp')
         yield {
             'name':target,
-            'actions':[(process_grid,[],{'gridsize':int(config.cfg['survey']['gridsize'])})],
+            'actions':[(process_grid,[],{'gridsize':int(config.cfg['gridsize'])})],
             'file_dep':[file],
             'targets':[target],
             'clean':True,

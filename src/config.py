@@ -7,9 +7,9 @@ import yaml
 import os
 import pandas as pd
 import shutil
-import jinja2
 import tkinter as tk
 from tkinter import filedialog
+from pathlib import Path
 
 
 
@@ -32,12 +32,10 @@ def geturl(key):
     global CATALOG_DIR
     if cfg is None:
         read_config()
-    environment = jinja2.Environment()
-    template = environment.from_string(cfg['paths'][key])
-    return(template.render(CATALOG_DIR=CATALOG_DIR))
+    return Path(cfg[key].format(CATALOG_DIR=CATALOG_DIR))
 
 def getdest(file):
     country = os.path.basename(file).split('_')[0]
     site = os.path.basename(file).split('_')[1]
     sitecode = '_'.join(os.path.basename(file).split('_')[1:3])
-    return os.path.join(geturl('output'),country,site,sitecode)     
+    return geturl('output') /country / site /sitecode     

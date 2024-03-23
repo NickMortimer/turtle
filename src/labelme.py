@@ -151,47 +151,7 @@ def task_set_up():
 #         }  
 
       
-def task_make_labelgps():
-    def process_labelgps(dependencies, targets):
 
-
-        datafile = glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*_survey_area_data.csv'))
-        if len(datafile)==0:
-            datafile = glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*_survey_area.csv'))
-        if len(datafile)==0:
-            datafile = glob.glob(os.path.join(os.path.dirname(dependencies[0]),'*_survey_data.csv'))
-        
-        source_file = pd.read_csv(datafile[0])
-        wanted =['TimeStamp','Longitude','Latitude','AbsoluteAltitude','RelativeAltitude','CalibratedFocalLength','CalibratedOpticalCenterX','CalibratedOpticalCenterY',
-                 'ImageHeight','ImageWidth','NewName','GimbalPitchDegree','GimbalRollDegree','GimbalYawDegree','DewarpData','CalibrationDate','CalibratedFocalLengthX','CalibratedFocalLengthY','CalibratedOpticalCenterX','CalibratedOpticalCenterY',
-                 'K1','K2','P1',"P2","K3"]
-        if 'DewarpData' in source_file.columns:
-            source_file[['CalibrationDate','CalibratedFocalLengthX','CalibratedFocalLengthY','CalibratedOpticalCenterX','CalibratedOpticalCenterY',
-                         'K1','K2','P1',"P2","K3"]] = source_file['DewarpData'].str.split(r'[;,]',expand=True)
-            source_file[['CalibratedFocalLengthX','CalibratedFocalLengthY','CalibratedOpticalCenterX','CalibratedOpticalCenterY',
-                         'K1','K2','P1',"P2","K3"]] = source_file[['CalibratedFocalLengthX','CalibratedFocalLengthY','CalibratedOpticalCenterX','CalibratedOpticalCenterY',
-                         'K1','K2','P1',"P2","K3"]].astype(float)
-            source_file['CalibratedOpticalCenterX'] = (source_file['ImageWidth']/2)-source_file['CalibratedOpticalCenterX']
-            source_file['CalibratedOpticalCenterY'] = (source_file['ImageHeight']/2)+source_file['CalibratedOpticalCenterY']
-            source_file['Latitude'] = source_file['LatitudeMrk'] 
-            source_file['Longitude'] = source_file['LongitudeMrk'] 
-        gps =source_file[source_file.columns[source_file.columns.isin(wanted)]].rename(columns={'NewName':'FileName'}).set_index('FileName')
-        gps['GimbalPitchDegree'] = gps['GimbalPitchDegree'] + 90
-        gps['Key'] = gps.index
-        gps['Key'] = gps.Key.apply(lambda x: os.path.splitext(x)[0])
-        gps.to_csv(targets[0])
-        os.path.splitext
-
-    file_dep =  Path(config.geturl('output')).glob('**/*_survey_area_data.csv')
-    for item in file_dep:
-        target = item.parent / 'location.csv'       
-        yield {
-            'name': item,
-            'file_dep':[item],
-            'actions':[process_labelgps],
-            'targets':[target],
-            'clean':True,
-        } 
 
  
 def task_matchup_labelme():

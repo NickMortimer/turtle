@@ -9,12 +9,13 @@ import pandas as pd
 from doit import create_after
 import numpy as np
 import geopandas as gp
-from geopandas.tools import sjoin
 from drone import P4rtk
 from read_rtk import read_mrk
 from pyproj import Proj 
 from utils import convert_wgs_to_utm
 import config
+from pathlib import Path
+import re
 
 
 
@@ -88,27 +89,31 @@ def task_process_mergpos():
             drone.to_csv(targets[0],index=True)
             
 
-        for item in glob.glob(config.geturl('imagesource'),recursive=True):
-            source = os.path.dirname(item)
-            file_dep  =  list(filter(lambda x:  any(f in x for f in ['exif.csv','Timestamp']), glob.glob(os.path.join(source,'*.*'))))
-            fild_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
-            target =   os.path.join(source,'position.csv')   
-            if list(filter(lambda x: 'exif.csv' in x,file_dep)):        
-                yield {
-                    'name':source,
-                    'actions':[process_json],
-                    'file_dep':file_dep,
-                    'targets':[target],
-                    'clean':True,
-                }    
+        for item in config.geturl('imagesource').rglob('.'):
+            source = list(item.glob('*.*'))
+            if source:
+                file_dep  =  list(filter(lambda x:  any(f in x.name for f in ['exif.csv','Timestamp']), source))
+                fild_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
+                target =   item / 'position.csv'   
+                if list(filter(lambda x: 'exif.csv' in x.name,file_dep)):        
+                    yield {
+                        'name':target,
+                        'actions':[process_json],
+                        'file_dep':file_dep,
+                        'targets':[target],
+                        'clean':True,
+                    }    
 @create_after(executed='process_mergpos', target_regex='*\position.json')    
 def task_addpolygons():
-    def process_polygons(dependencies, targets,dewarp):
+    def process_polygons(dependencies, targets):
         def getpoly(item):
             if 'DewarpData' in item.keys():
-                drone =P4rtk(pd.to_numeric(item.DewarpData.split(',')[1:]),crs)
+                drone =P4rtk(pd.to_numeric(re.split(';|,',item.DewarpData)[1:]),crs,item.ImageWidth,item.ImageHeight)
+            elif 'CalibratedOpticalCenterX' in item.keys():
+                    drone =P4rtk([item.CalibratedFocalLength,
+                                 item.CalibratedOpticalCenterX,item.CalibratedOpticalCenterY],crs,item.ImageWidth,item.ImageHeight)
             else:
-                drone =P4rtk(cal,crs)
+                pass
             drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
                                   item.GimbalPitchDegree,item.GimbalRollDegree,item.GimbalYawDegree)
             return drone.getimagepolygon()
@@ -122,13 +127,13 @@ def task_addpolygons():
         
         
 
-    dewarp = pd.to_numeric(config.cfg['survey']['dewarp'] )
-    cal = pd.to_numeric(config.cfg['survey']['calibration'] )
-    for file_dep in glob.glob(os.path.join(config.geturl('imagesource'),'position.csv'),recursive=True):
-        target = file_dep.replace('position.csv','polygons.csv')   
+    # dewarp = pd.to_numeric(config.cfg['dewarp'] )
+    # cal = pd.to_numeric(config.cfg['calibration'] )
+    for file_dep in config.geturl('imagesource').rglob('position.csv'):
+        target = file_dep.parent /'polygons.csv'
         yield {
             'name':file_dep,
-            'actions':[(process_polygons, [],{'dewarp':dewarp})],
+            'actions':[process_polygons],
             'file_dep':[file_dep],
             'targets':[target],
             'clean':True,
@@ -141,20 +146,23 @@ def task_merge_xif():
             drone = pd.concat([pd.read_csv(file,index_col='TimeStamp',parse_dates=['TimeStamp']) 
                             for file in list(dependencies)]) 
             drone.sort_index(inplace=True)
-            drone = drone[~drone.LatitudeMrk.isna()]
+
+            # if 'LatitudeMrk' in drone.columns:
+            #     rtkmask =drone.RtkFlag==1
+            #     drone = drone[~drone.LatitudeMrk.isna()]
             drone.to_csv(list(targets)[0],index=True)
             
-        searchpath = os.path.join(config.geturl('imagesource'),'polygons.csv')
-        file_dep = glob.glob(searchpath,recursive=True)
-        processpath =config.geturl('process')
-        os.makedirs(processpath,exist_ok=True)
-        target = os.path.join(processpath,'imagedata.csv')
-        return {
-            'actions':[process_xif],
-            'file_dep':file_dep,
-            'targets':[target],
-            'clean':True,
-        }
+        file_dep = list(config.geturl('imagesource').rglob('polygons.csv'))
+        if file_dep:
+            processpath =config.geturl('process')
+            os.makedirs(processpath,exist_ok=True)
+            target = processpath / 'imagedata.csv'
+            return {
+                'actions':[process_xif],
+                'file_dep':file_dep,
+                'targets':[target],
+                'clean':True,
+            }
 
 
 if __name__ == '__main__':
