@@ -13,11 +13,17 @@ import shutil
 import shapely.wkt
 from shapely.geometry import MultiPoint
 from doit.task import clean_targets     
-import config
+import utils.config as config
 from pathlib import Path
+
        
     
 def task_make_surveys():
+        """
+        Break out the surveys into separate csv files
+        take surveys with area from the process directory
+        make a target for each survey
+        """
         def process_surveys(dependencies, targets):
             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
             for name,data in drone.groupby('Survey'):
@@ -45,6 +51,9 @@ def task_make_surveys():
             
 #@create_after(executed='make_surveys', target_regex='.*\surveyswitharea.csv')             
 def task_calculate_survey_areas():
+    """
+    calculate the area of each survey using the convex hull
+    """
     def poly_to_points(polygon):
         return np.dstack(polygon.exterior.coords.xy)
     
@@ -81,6 +90,9 @@ def task_calculate_survey_areas():
 
 @create_after(executed='calculate_survey_areas', target_regex='.*\surveyswitharea.csv')                  
 def task_images_dest():
+        """
+        create the new names for the images and paths
+        """
         def process_images(dependencies, targets,destination):
             survey = pd.read_csv(dependencies[0])
             os.makedirs(destination,exist_ok=True)
@@ -108,6 +120,9 @@ def task_images_dest():
 
 @create_after(executed='images_dest', target_regex='.*\surveyswitharea.csv')                  
 def task_file_images():
+        """
+        move the images to their final resting place
+        """
         def process_images(dependencies, targets):
             destination =os.path.dirname(targets[0])
             os.makedirs(destination,exist_ok=True)
@@ -120,9 +135,6 @@ def task_file_images():
                         index =source.parts.index(root)
                         if index>0:
                             source =config.geturl('imagehead') / Path(*source.parts[index+1:]) 
-                    # if config.cfg['outputsymlink']:
-                    #     relpath = os.path.join(os.path.relpath(os.path.dirname(source),start=os.path.dirname(row.FileDest)),os.path.basename(source))
-                    #     os.symlink(relpath, row.FileDest )
                     if config.cfg['outputhardlink']:
                         os.link(os.path.abspath(source),row.FileDest)
                     else:
@@ -147,6 +159,9 @@ def task_file_images():
            
 
 def task_move_summary():
+    """
+    Move the file summary to the output directory
+    """
     def move_smmary(dependencies, targets):
         shutil.copyfile(dependencies[0],targets[0])
         
@@ -162,32 +177,6 @@ def task_move_summary():
             'uptodate': [True],
             'clean':True,
         }  
-
-def task_make_geo():
-    def make_geo(dependencies, targets):
-        data = pd.read_csv(dependencies[0])
-        if 'LongitudeMrk' in data.columns:
-            text = list(data.apply(lambda x:f'{x.NewName}   {x.LongitudeMrk}   {x.LatitudeMrk}    {x.EllipsoideHightMrk} {x.CameraYaw} {x.CameraPitch} {x.CameraRoll}\n\r',axis=1))
-        else:
-            text = list(data.apply(lambda x:f'{x.NewName}   {x.Longitude}   {x.Latitude}    {x.RelativeAltitude} {x.CameraYaw} {x.CameraPitch} {x.CameraRoll}\n\r',axis=1))
-        if 'LatitudeMrk' in data.columns:
-            with open(targets[0], 'a') as f:
-                f.write('EPSG:4326\n\r')
-                f.writelines(text)
-        
-    
-    file_dep = glob.glob(os.path.join(config.geturl('output'),'**','*_survey_area_data.csv'),recursive=True)
-    for file in file_dep:
-        target = os.path.join(config.getdest(os.path.basename(file)),'geo.txt')
-        yield {
-            'name':file,
-            'actions':[make_geo],
-            'file_dep':[file],
-            'targets':[target],
-            'uptodate': [True],
-            'clean':True,
-        }                                
-            
 
 
 if __name__ == '__main__':

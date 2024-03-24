@@ -2,9 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 import json
-from PIL import Image
+from PIL import Image,ImageDraw
 from tqdm import tqdm
-import config
+import utils.config as config
 import doit
 from doit.action import CmdAction
 from doit import create_after
@@ -46,10 +46,10 @@ def circle_to_bbox(circle_ann, img_width, img_height):
     radius = ((center[0] - edge[0])**2 + (center[1] - edge[1])**2)**0.5
 
     # Calculate the bounding box coordinates
-    x_min = center[0] - radius*1.3
-    y_min = center[1] - radius*1.3
-    x_max = center[0] + radius*1.3
-    y_max = center[1] + radius*1.3
+    x_min = center[0] - radius*1.5
+    y_min = center[1] - radius*1.5
+    x_max = center[0] + radius*1.5
+    y_max = center[1] + radius*1.5
 
     # Convert the bounding box coordinates to integers
     bbox = [int(x_min), int(y_min), int(x_max), int(y_max)]
@@ -245,9 +245,9 @@ def task_make_taining():
     def process_images_and_save_patches(dependencies, targets):
         #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------_df, image_folder, patch_size, overlap, class_labels, output_folder):
         # Ensure output directories exist
-        patch_path = config.geturl('trainpath') / 'yolo' / 'images'
+        patch_path = config.geturl('trainpath') / 'poster' / 'images'
         os.makedirs(patch_path, exist_ok=True)
-        patch_annotation_path = config.geturl('trainpath') / 'yolo' /  'labels'
+        patch_annotation_path = config.geturl('trainpath') / 'poster' /  'labels'
         os.makedirs(patch_annotation_path, exist_ok=True)
         patch_size = int(config.cfg['patch_size'])
         overlap = int(config.cfg['overlap'])
@@ -258,23 +258,66 @@ def task_make_taining():
         class_labels = generate_class_labels(detections_df)
         for key, group in tqdm(detections_df.groupby('Key'), desc="Processing images and saving patches"):
             # Open the image and convert to numpy array
-            image_np = np.array(Image.open(group.ImageFile.iloc[0]))
-            
-            # Process and split each image into patches with annotations
-            patches, patch_annotations = split_image_into_patches_with_annotations(group, image_np, patch_size, overlap, class_labels)
+            img =Image.open(group.ImageFile.iloc[0])
+            for index,row in group.iterrows():
+                draw = ImageDraw.Draw(img)
+                try:
+                    for index, row in group.iterrows():
+                        bbox = np.array(row.BoundingBox)
+                        bbox[bbox <= 0] = 0
+                        draw.rectangle(bbox.tolist(), outline="red",width=3)    
+                except:
+                    print(f'image {key} box{bbox}')
+            image_np = np.array(img)
+            for i,(index,row) in enumerate(group.iterrows()):
+                try:
+                    bbox = np.array(row.BoundingBox)
+                    # Process and split each image into patches with annotations
+                    x =np.random.rand()
+                    x1 = int(patch_size*x)
+                    x2 = int(patch_size*(1-x))+1
+                    y =np.random.rand()  
+                    y1 = int(patch_size*y)
+                    y2 = int(patch_size*(1-y))+1
+                    xcenter = int(bbox[0:4:2].mean())
+                    ycenter = int(bbox[1:4:2].mean())
+                    xmin = xcenter - x1
+                    xmax = xcenter + x2
+                    ymin = ycenter - y1
+                    ymax = ycenter + y2
+                    if xmin<0:
+                        xmax = patch_size
+                        xmin =0
+                    elif xmax> img.width:
+                        xmax = img.width
+                        xmin = img.width-patch_size
+                    if ymin<0:
+                        ymax = patch_size
+                        ymin =0
+                    elif ymax> img.height:
+                        ymax = img.height
+                        ymin = img.height-patch_size
+                    patch_filename = f"{key}_patch_{i}.jpg"
+                    Image.fromarray(image_np[ymin:ymax,xmin:xmax]).save(patch_path / patch_filename ) 
+                except:
+                    print(f'image {key} box{bbox}')
+               
+            #     patched_annotations = bbox_to_patch_yolo(bbox, xmin, ymin, patch_size, patch_size, class_labels, row.Label)
+
+            #patches, patch_annotations = split_image_into_patches_with_annotations(group, image_np, patch_size // 2, overlap, class_labels)
          
             # Save each patch and its annotations---------------------------------
-            for i, (patch, annotation_texts) in enumerate(zip(patches, patch_annotations)):
-                if len(annotation_texts)>0:
-                    patch_filename = f"{key}_patch_{i}.jpg"
-                    patch_annotation_filename = f"{key}_patch_{i}.txt"   
-                    Image.fromarray(patch).save(patch_path / patch_filename )  # Save image patch
-                    # Save YOLO annotations if available
-                    with open(patch_annotation_path / patch_annotation_filename , 'w') as f:
-                        f.writelines([f"{text}\n" for text in annotation_texts])
+            # for i, (patch, annotation_texts) in enumerate(zip(patches, patch_annotations)):
+            #     if len(annotation_texts)>0:
+            #        
+            #         patch_annotation_filename = f"{key}_patch_{i}.txt"   
+            #         Image.fromarray(patch).save(patch_path / patch_filename )  # Save image patch
+            #         # Save YOLO annotations if available
+            #         with open(patch_annotation_path / patch_annotation_filename , 'w') as f:
+            #             f.writelines([f"{text}\n" for text in annotation_texts])
         detections_df.to_csv(targets[0],index=False)
     file_dep =config.geturl('output') / 'train' / 'object_index.csv'
-    target = config.geturl('output') / 'train' / 'yolo.csv'
+    target = config.geturl('output') / 'train' / 'yolop.csv'
     return {
         'actions':[CmdAction(process_images_and_save_patches, buffering=1)],
         'file_dep':[file_dep],

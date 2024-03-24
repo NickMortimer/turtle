@@ -1,4 +1,3 @@
-from genericpath import exists
 import os
 import glob
 import doit
@@ -9,39 +8,51 @@ import pandas as pd
 from doit import create_after
 import numpy as np
 import geopandas as gp
-from drone import P4rtk
-from read_rtk import read_mrk
-from pyproj import Proj 
 from shapely.geometry import MultiPoint
-from utils import convert_wgs_to_utm
-import config
+from utils.utils import convert_wgs_to_utm
+import utils.config as config
 
 def task_set_up():
     config.read_config()
 
 
 def task_make_area_list():
-        def split(path):
-            print(path)
-            keys =os.path.splitext(os.path.basename(path))[0].split('_')
-            return {'SurveyCode':keys[0],'SurveyLongName':keys[1],'Type':keys[2],'File':path}
+    """
+        look for shape files that have the areas of interest in 
+
+        path to survey area shape files is in config file:
+            surveyarea : "{CATALOG_DIR}/survey_area/"
+        example:
+            TULKI_TulkiBeach_SurveyArea.shp
+            {short_code}_{long_name}_SurveyArea
+
+        target is sent to processing directory
+            surveyareas.csv
+    """
+    def split(path):
+        print(path)
+        keys =os.path.splitext(os.path.basename(path))[0].split('_')
+        return {'SurveyCode':keys[0],'SurveyLongName':keys[1],'Type':keys[2],'File':path}
+    
+    def process_area_list(dependencies, targets):
+        areas = pd.DataFrame.from_records([split(shape) for shape in dependencies])
+        os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
+        areas.to_csv(targets[0],index=False)                
         
-        def process_area_list(dependencies, targets):
-            areas = pd.DataFrame.from_records([split(shape) for shape in dependencies])
-            os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
-            areas.to_csv(targets[0],index=False)                
-            
-        file_dep = glob.glob(os.path.join(config.geturl('surveyarea'),'**/*.shp'),recursive=True)
-        target = os.path.join(config.geturl('process'),'surveyareas.csv')
-        return {
-            'actions':[process_area_list],
-            'file_dep':file_dep,
-            'targets':[target],
-            'clean':True,
-        } 
+    file_dep = glob.glob(os.path.join(config.geturl('surveyarea'),'**/*.shp'),recursive=True)
+    target = os.path.join(config.geturl('process'),'surveyareas.csv')
+    return {
+        'actions':[process_area_list],
+        'file_dep':file_dep,
+        'targets':[target],
+        'clean':True,
+    } 
         
 @create_after(executed='make_area_list')         
 def task_make_grids():
+    """
+        make a grid that can be used to extract tiles from the images
+    """
     def process_grid(dependencies, targets,gridsize=10):
         area = gp.read_file(dependencies[0])
         utmcode = convert_wgs_to_utm(area.iloc[0].geometry.exterior.coords.xy[0][0],area.iloc[0].geometry.exterior.coords.xy[1][0])
@@ -57,11 +68,6 @@ def task_make_grids():
         d = {'Grid': ['25m'], 'geometry': [p]}
         df =gp.GeoDataFrame(d, crs=crs)
         df.to_file(targets[0])        
-# surveyarea =area.iloc[0].geometry
-# easting,northing =grid(surveyarea,20)
-# xi,yi = np.meshgrid(easting,northing)        
-
-
 
     file_dep = glob.glob(os.path.join(config.geturl('surveyarea'),'**/*_AOI.shp'),recursive=True)
     for file in file_dep:

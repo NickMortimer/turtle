@@ -16,7 +16,7 @@ import shapely.wkt
 from shapely.geometry import MultiPolygon
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
-import config
+import utils.config as config
 import shutil
 
 
@@ -29,7 +29,10 @@ def task_set_up():
     config.read_config()
          
    
-def task_check_survey():  
+def task_check_survey(): 
+    """
+    Create a summary file for each survey
+    """ 
     def process_check_survey(dependencies, targets):
         drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
         images = pd.DataFrame(glob.glob(os.path.join(os.path.dirname(drone['FileDest'].min()),'*.JPG')),
@@ -68,6 +71,9 @@ def task_check_survey():
       
 @create_after(executed='check_survey', target_regex='*_survey_summary')  
 def task_concat_check_survey():
+    """
+    Concat each summary file into a single file 
+    """
     def process_concat_check_survey(dependencies, targets):
         os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
         surveys =pd.concat([pd.read_csv(file) for file in dependencies])
@@ -84,6 +90,12 @@ def task_concat_check_survey():
         }     
         
 def task_plot_surveys():
+    """
+    Plot each survey make sure your mapbox api key
+    config
+        mapboxkey : your mapboxkey
+        reports : sets the destination of the files
+    """
     def process_survey(dependencies, targets,apikey):
         drone =pd.concat([pd.read_csv(file,index_col='TimeStamp',parse_dates=['TimeStamp']) for file in dependencies])
         drone = drone[drone.Longitude>0]
@@ -111,6 +123,9 @@ def task_plot_surveys():
     }  
     
 def task_plot_each_survey():
+    """
+    Plot each flight to a png file
+    """
     def process_survey(dependencies, targets,apikey):
         drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
         px.set_mapbox_access_token(apikey)
@@ -138,6 +153,9 @@ def task_plot_each_survey():
         }        
     
 def task_geopgk_survey():
+    """
+    Create geopgk file for QGIS 
+    """
     def process_geo(dependencies, targets):
         data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
         if "UtmCode" in data.columns:
@@ -166,6 +184,9 @@ def task_geopgk_survey():
         }  
     
 def task_html_report():
+    """
+    Make a html report of the flight
+    """
     def process_report(dependencies, targets):
         data =pd.read_csv(dependencies[0]).iloc[0]
         env = Environment(loader=FileSystemLoader(os.path.join(Path(os.path.abspath(__file__)).parent.parent,'templates')))
@@ -199,6 +220,31 @@ def task_html_report():
             'uptodate': [True],
             'clean':True,
         }  
+
+def task_data_summary():
+    """
+    create a summary list of the flights with 
+    """
+    def process_surveys(dependencies, targets):
+        drone =pd.concat([pd.read_csv(file,index_col='SurveyId',parse_dates=['StartTime','EndTime']) for file in dependencies])
+        drone['ElapsedTime'] = drone.EndTime - drone.StartTime 
+        drone['ElapsedTime'] = (drone['ElapsedTime'].dt.total_seconds()).astype(int) /60
+        drone['SurveyRate'] =  drone.Area /drone.ElapsedTime 
+        drone = drone.sort_index()
+        drone.to_csv(targets[0]) 
+
+        
+    surveys = os.path.join(config.geturl('surveysource'),'*survey_area_data_summary.csv')
+    file_dep = glob.glob(surveys,recursive=True)
+    os.makedirs(config.geturl('reports'),exist_ok=True)
+    target = f"{config.geturl('reports')}/survey_area_data_summary.csv"
+    return {
+        'actions':[process_surveys],
+        'file_dep':file_dep,
+        'targets':[target],
+        'clean':True,
+    } 
+
         
 if __name__ == '__main__':
     import doit

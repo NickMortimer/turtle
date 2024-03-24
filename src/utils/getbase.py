@@ -7,10 +7,10 @@ import os
 import glob
 from doit.tools import run_once
 from doit import create_after
-from read_rtk import read_mrk_gpst
+from utils.read_rtk import read_mrk_gpst
 import shutil
-from read_rtk import read_pos
-import config
+from utils.read_rtk import read_pos
+import utils.config as config
 
 def getbasenames(times,station,destination):
     """Create the names of the files neaded to get from Geoscience Australia

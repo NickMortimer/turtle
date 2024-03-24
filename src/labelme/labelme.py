@@ -12,11 +12,11 @@ import numpy as np
 import geopandas as gp
 import json
 import ast
-from drone import P4rtk
+from utils.drone import P4rtk
 from sklearn.cluster import MeanShift
 import matplotlib.pyplot as plt
 import shapely.wkt
-import config
+import utils.config as config
 import shapely.wkt
 from shapely.geometry import MultiPoint
 from pathlib import Path

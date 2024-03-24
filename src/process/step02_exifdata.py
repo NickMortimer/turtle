@@ -8,7 +8,7 @@ from doit import get_var
 from doit.tools import run_once
 from doit import create_after
 import numpy as np
-import config
+import utils.config as config
 from shutil import which
 
 
@@ -27,17 +27,16 @@ wanted ={"SourceFile","FileModifyDate","ImageDescription",
          "FOV","Latitude",'Longitude','SubSecDateTimeOriginal','FlightYSpeed','FlightXSpeed','FlightYSpeed'
          'Orientation','ShutterSpeedValue','ApertureValue','WhiteBalance','RtkFlag','DewarpData','DewarpFlag','Model'}
 
- 					
-										
-								
-													
-								
-							
-										
-	
-
-
 def task_create_json():
+        """
+            Scan through the raw directories and make a json file with the xif data in
+            from the config file
+            imagesource :  "{CATALOG_DIR}/TR2023-02/instruments/P4RTK/work/raw"
+            imagewild : "*_*_*.JPG"
+
+            path to exiftool
+            exiftool : exiftool
+        """
         exifpath = os.path.join(config.geturl('exiftool'))
         for item in config.geturl('imagesource').rglob('.'):
             file_dep = list(item.glob(config.cfg['imagewild']))
@@ -50,7 +49,6 @@ def task_create_json():
                             'actions':[f'exiftool -ext JPG -ext jpg -json "{item.resolve()}" > "{target.resolve()}"'],
                             'targets':[target],
                             'uptodate':[True],
-    #                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
                             'clean':True,
                         }
                     else:
@@ -60,17 +58,18 @@ def task_create_json():
                             'actions':[f'"{exifpath}" -ext JPG -ext jpg -json "{os.path.abspath(item)}" > "{os.path.abspath(target)}"'],
                             'targets':[target],
                             'uptodate':[True],
-    #                        'uptodate': [check_timestamp_unchanged(file_dep, 'ctime')],
                             'clean':True,
                         }
  
     
 @create_after(executed='create_json', target_regex='.*\exif.json')    
 def task_process_json():
+        """
+            use to find all *.json files and convert them to csv files
+            imagesource :  "{CATALOG_DIR}/TR2023-02/instruments/P4RTK/work/raw"
+        """
         def process_json(dependencies, targets):
             source_file =dependencies[0]
-            print('source file is: {0}'.format(source_file))
-            print('output dir is: {0}'.format(list(targets)[0]))
             if os.stat(source_file).st_size > 0:
                 drone = pd.read_json(source_file)
                 if 'GPSLongitude' in drone.columns:
@@ -104,12 +103,6 @@ def task_process_json():
                 'targets':[target],
                 'clean':True,
             }
-            
-
-
-            
-            
-           
         
 if __name__ == '__main__':
     import doit

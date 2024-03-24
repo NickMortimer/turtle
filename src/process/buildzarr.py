@@ -16,8 +16,8 @@ import plotly
 import plotly.express as px
 import geopandas as gp
 from geopandas.tools import sjoin
-from drone import P4rtk
-from read_rtk import read_mrk
+from utils.drone import P4rtk
+from utils.read_rtk import read_mrk
 from pyproj import Proj 
 from doit.tools import check_timestamp_unchanged
 from doit.tools import config_changed
