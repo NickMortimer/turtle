@@ -5,6 +5,7 @@ description = ""
 authors = ["Nick Mortimer <nick.mortimer@csiro.au>"]
 readme = "README.md"
 
+[tool.poetry.extras]
 docs = ["sphinx", "sphinx-rtd-theme"]
 
 [tool.poetry.dependencies]
