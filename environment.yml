@@ -26,5 +26,6 @@ dependencies:
     - cameratransform
     - doit
     - pysftp
+    - sphinx_rtd_theme
 
 
