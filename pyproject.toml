@@ -5,6 +5,8 @@ description = ""
 authors = ["Nick Mortimer <nick.mortimer@csiro.au>"]
 readme = "README.md"
 
+docs = ["sphinx", "sphinx-rtd-theme"]
+
 [tool.poetry.dependencies]
 python = "^3.9"
 sphinx = "^7.2.6"
