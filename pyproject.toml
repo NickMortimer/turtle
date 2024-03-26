@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "turtle-drone"
+name = "turtledrone"
 version = "0.1.0"
 description = ""
 authors = ["Nick Mortimer <nick.mortimer@csiro.au>"]
