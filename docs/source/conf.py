@@ -18,9 +18,8 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
-    'sphinx.ext.viewcode',
-    'sphinxcontrib.jquery',  # to fix read the docs jQuery bug (https://github.com/readthedocs/sphinx_rtd_theme/issues/1452)
-]
+    'sphinx.ext.viewcode'
+    ]
 
 templates_path = ['_templates']
 exclude_patterns = ['**.ipynb_checkpoints']
