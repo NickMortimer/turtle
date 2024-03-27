@@ -12,7 +12,9 @@
 
 <p><i>A Python package for managing drone based surveys of marine turtles.</i></p>
 
-<https://readthedocs.org/projects/turtle-drone/badge/?version=latest>
+[![Documentation Status](https://readthedocs.org/projects/turtle-drone/badge/?version=latest)](https://readthedocs.org/projects/turtle-drone/badge/?version=latest)
+
+
 
 ## Contents
 

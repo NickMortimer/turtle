@@ -6,7 +6,7 @@ Install with pip
 
 The simplest way to install the package is using pip:
 
-    ``pip install cameratransform``
+    ``pip install turtledrone`` (not yet implemented!)
 
 Install from the repository
 ---------------------------
@@ -15,11 +15,11 @@ If you want to get a bleeding edge version, you can download the package form ou
 
 First of all download the software from github:
 
-`Download zip package <https://github.com/rgerum/cameratransform/archive/master.zip>`_
+`Download zip package <https://github.com/NickMortimer/turtle/archive/refs/heads/master.zip>`_
 
 or clone with Git:
 
-    ``git clone https://github.com/rgerum/cameratransform.git``
+    ``git clone https://github.com/NickMortimer/turtle.git``
 
 Then open the installed folder and execute the following command in a command line:
 
