@@ -19,7 +19,6 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
-    'nbsphinx',
     'sphinxcontrib.jquery',  # to fix read the docs jQuery bug (https://github.com/readthedocs/sphinx_rtd_theme/issues/1452)
 ]
 
@@ -33,6 +32,6 @@ exclude_patterns = ['**.ipynb_checkpoints']
 
 #import sphinx_rtd_theme
 
-#html_theme = 'sphinx_rtd_theme'
+html_theme = 'sphinx_rtd_theme'
 #html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 #html_static_path = ['_static']
