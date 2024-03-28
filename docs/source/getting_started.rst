@@ -35,7 +35,7 @@ create a directory that will hold your drone imagery place the config file in th
 
 
 .. code-block:: console
-    $python ./turtledrone/exifdata.py {fieldTripId}_config.yml
+    python ./turtledrone/exifdata.py {fieldTripId}_config.yml
 
 In the folder structure above:
 
