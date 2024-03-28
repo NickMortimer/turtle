@@ -1,8 +1,8 @@
 Getting Started
 ===============
 
-Setting Up A Configuration File
--------------------------------
+Setting Up A Directory File
+---------------------------
 
 create a directory that will hold your drone imagery place the config file in the project root directory. 
 
@@ -31,6 +31,7 @@ create a directory that will hold your drone imagery place the config file in th
 |     ├── reports
 |     └── train
 
+
 In the folder structure above:
 
 - ``{fieldTripId}`` create this folder with the name of the field trip eg. TR2022-01 
@@ -42,3 +43,12 @@ In the folder structure above:
 
 .. note::
     You can set up a config file to output data into a survey folder that contains many field trips
+
+Setting Up A Configuration File
+-------------------------------
+
+The configuration of the project is held in config.yml
+
+.. literalinclude:: ../../examples/example_config.yml
+
+
