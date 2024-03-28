@@ -14,6 +14,14 @@ sphinx = "^7.2.6"
 sphinx-rtd-theme = "^2.0.0"
 nbsphinx = "^0.9.3"
 
+[tool.poetry.scripts]
+initalise = 'turtledrone:initalise'
+exifdata = 'turtledrone:exifdata'
+DJIP4RTK = 'turtledrone:DJIP4RTK'
+setsurveyarea = 'turtledrone:setsurveyarea'
+surveys = 'turtledrone:surveys'
+reports = 'turtledrone:reports'
+
 
 [build-system]
 requires = ["poetry-core"]

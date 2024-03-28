@@ -1,16 +1,11 @@
 import os
-import glob
 import doit
 import numpy as np
-import yaml
 import pandas as pd
-from doit import get_var
-from doit.tools import run_once
-from doit import create_after
 import numpy as np
-import utils.config as config
+import turtledrone.config as config
 from shutil import which
-
+from doit import create_after
 
 
 wanted ={"SourceFile","FileModifyDate","ImageDescription",

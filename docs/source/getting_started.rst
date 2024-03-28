@@ -6,31 +6,36 @@ Setting Up A Directory File
 
 create a directory that will hold your drone imagery place the config file in the project root directory. 
 
-| {fieldTirpId}
-| ├── raw/
-| │   ├── {downLoadCode}
-| │   │   ├── {SdCardDataID}
-| │   │   │    └── DCIM
-| │   │   └── ...
-| │   │
-| │   ├── process/
-| │   │   ├── surveyareas.csv
-| │   │   ├── surveys.csv
-| │   │   ├── surveyswitharea.csv
-| │   │   ├── imagedata.csv
-| │   │   ├── {countryCode}_{surveyCode}_{dateTime}_survey.csv
-| │   │   ├── {countryCode}_{surveyCode}_{dateTime}_survey_area.csv
-| │   │   └── {countryCode}_{surveyCode}_{dateTime}_survey_area_data.csv
-| │   └── gnss
-| │
-| └── surveys/
-|     ├── {countryCode}
-|     │   └── {siteID}
-|     │       └── {surveyID}
-|     │           └── {droneID}_{imageType}_{countryCode}_{siteID}_{dateTime}_{imageCount}.JPG
-|     ├── reports
-|     └── train
+|data_directory
+|   └──{fieldTripId}_config.yml
+|       └── {fieldTirpId}
+|           ├── raw/
+|           │   ├── {downLoadCode}
+|           │   │   ├── {SdCardDataID}
+|           │   │   │    └── DCIM
+|           │   │   └── ...
+|           │   │
+|           │   ├── process/
+|           │   │   ├── surveyareas.csv
+|           │   │   ├── surveys.csv
+|           │   │   ├── surveyswitharea.csv
+|           │   │   ├── imagedata.csv
+|           │   │   ├── {countryCode}_{surveyCode}_{dateTime}_survey.csv
+|           │   │   ├── {countryCode}_{surveyCode}_{dateTime}_survey_area.csv
+|           │   │   └── {countryCode}_{surveyCode}_{dateTime}_survey_area_data.csv
+|           │   └── gnss
+|           │
+|           └── surveys/
+|               ├── {countryCode}
+|               │   └── {siteID}
+|               │       └── {surveyID}
+|               │           └── {droneID}_{imageType}_{countryCode}_{siteID}_{dateTime}_{imageCount}.JPG
+|               ├── reports
+|               └── train
 
+
+.. code-block:: bash
+    $.python ./turtledrone/exifdata.py config.yml {fieldTripId}_config.yml
 
 In the folder structure above:
 

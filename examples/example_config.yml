@@ -1,17 +1,17 @@
-fieldtrip : 'TR2023-01'
+fieldtrip : TR2023-01
 exiftool : exiftool
-imagehead : "{CATALOG_DIR}/{fieldtrip}/fielddata/p4rtk/raw"
-imagesource :  "{CATALOG_DIR}/{fieldtrip}/fielddata/p4rtk/raw/"
-marksource: "{CATALOG_DIR}/{fieldtrip}/fielddata/p4rtk/raw/*.MRK"
-obssource: "{CATALOG_DIR}/{fieldtrip}/fielddata/p4rtk/raw/**/100_*/*_Rinex.obs"
-possource: "{CATALOG_DIR}/{fieldtrip}/fielddata/p4rtk/raw/**/100_*/*_Rinex.pos"
-process: "{CATALOG_DIR}/{fieldtrip}/fielddata/p4rtk/raw/process"
-output :  "{CATALOG_DIR}/surveys"
+imagehead : "{CATALOG_DIR}/{fieldtrip}/raw"
+imagesource :  "{CATALOG_DIR}/{fieldtrip}/raw/"
+marksource: "{CATALOG_DIR}/{fieldtrip}/raw/*.MRK"
+obssource: "{CATALOG_DIR}/{fieldtrip}/*_Rinex.obs"
+possource: "{CATALOG_DIR}/{fieldtrip}/raw/**/100_*/*_Rinex.pos"
+process: "{CATALOG_DIR}/{fieldtrip}/raw/process"
+output :  "{CATALOG_DIR}/{fieldtrip}/surveys"
 imagewild : "*.JPG"
-gnssceche : "{CATALOG_DIR}/{fieldtrip}/fielddata/p4rtk/raw/gnss"
+gnssceche : "{CATALOG_DIR}/{fieldtrip}/raw/gnss"
 surveyarea : "{CATALOG_DIR}/survey_area/"
 labelmesource: "{CATALOG_DIR}/labelimage/turtle_json.csv"
-reports : "{CATALOG_DIR}/surveys/reports"
+reports : "{CATALOG_DIR}/{fieldtrip}/surveys/reports"
 country : AU
 cameratype : RGB
 dronetype: DJIP4

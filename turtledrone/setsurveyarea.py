@@ -12,8 +12,8 @@ from shapely.geometry import MultiPoint
 import utils.config as config
 from utils.utils import convert_wgs_to_utm
 from doit import create_after
-from Step01_initalise import task_make_area_list
-from Step01_initalise import task_make_grids
+from turtledrone.process.initalise import task_make_area_list
+from turtledrone.process.initalise import task_make_grids
 
 # def task_make_grids():
 #     def process_grid(dependencies, targets,gridsize=10):

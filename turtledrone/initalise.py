@@ -5,12 +5,12 @@ import glob
 import os
 import numpy as np
 import pandas as pd
-from doit import create_after
 import numpy as np
 import geopandas as gp
 from shapely.geometry import MultiPoint
-from utils.utils import convert_wgs_to_utm
-import utils.config as config
+from turtledrone.utils import convert_wgs_to_utm
+import turtledrone.config as config
+from doit import create_after
 
 def task_set_up():
     config.read_config()

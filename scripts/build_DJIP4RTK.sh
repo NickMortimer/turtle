@@ -1,6 +1,6 @@
 #!/bin/bash
 
-doit -f initalise.py  config=$1
+doit -f ../turtledrone/process/initalise.py  config=$1
 doit -f exifdata.py  config=$1
 #doit -r getbase.py config=$1
 doit -f DJIP4RTK.py  config=$1

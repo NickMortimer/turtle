@@ -12,7 +12,6 @@ Welcome to turtle-drone's documentation!
 
    installation
    getting_started
-   configuration_file
    initializing_sd_cards
    importing_data
    processing 
@@ -24,7 +23,7 @@ Note
 ----
 
 If you encounter any bugs or unexpected behaviour, you are encouraged to report a bug in our
-Github `bugtracker <https://github.com/rgerum/cameratransform/issues>`_.
+Github `bugtracker <https://github.com/NickMortimer/turtle/issues>`_.
 
  
 

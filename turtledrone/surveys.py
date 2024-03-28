@@ -13,7 +13,7 @@ import shutil
 import shapely.wkt
 from shapely.geometry import MultiPoint
 from doit.task import clean_targets     
-import utils.config as config
+import config as config
 from pathlib import Path
 
        

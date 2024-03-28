@@ -8,7 +8,7 @@ import pandas as pd
 from doit import create_after
 import numpy as np
 import geopandas as gp
-from process.step04_DJIMavic2 import Mavic2
+from turtledrone.process.DJIMavic2 import Mavic2
 from pyproj import Proj 
 from utils.utils import convert_wgs_to_utm
 import utils.config as config
