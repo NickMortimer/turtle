@@ -6,7 +6,7 @@ Setting Up A Directory File
 
 create a directory that will hold your drone imagery place the config file in the project root directory. 
 
-|data_directory
+| data_directory
 |   └──{fieldTripId}_config.yml
 |       └── {fieldTirpId}
 |           ├── raw/
