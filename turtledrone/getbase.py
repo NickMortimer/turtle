@@ -7,10 +7,11 @@ import os
 import glob
 from doit.tools import run_once
 from doit import create_after
-from utils.read_rtk import read_mrk_gpst
+from read_rtk import read_mrk_gpst
 import shutil
-from utils.read_rtk import read_pos
-import utils.config as config
+from read_rtk import read_pos
+import config as config
+import sys
 
 def getbasenames(times,station,destination):
     """Create the names of the files neaded to get from Geoscience Australia
@@ -36,7 +37,7 @@ def getbasenames(times,station,destination):
     return pd.DataFrame(files)
 
 def getbase(files):
-    with pysftp.Connection('sftp.data.gnss.ga.gov.au', username='anonymous', password=config.cfg['user']['email']) as sftp:
+    with pysftp.Connection('sftp.data.gnss.ga.gov.au', username='anonymous', password=config.cfg['email']) as sftp:
         for item in files:
             dest = os.path.join(item['destination'],item['file'])
             print(dest)
@@ -54,15 +55,15 @@ def getbase(files):
 def task_calc_basefiles():
         def calc_basefiles(dependencies, targets):
             marks = [read_mrk_gpst(mark) for mark in dependencies]
-            files =pd.concat([getbasenames(df.index,config.cfg['survey']['basestation'],
+            files =pd.concat([getbasenames(df.index,config.cfg['basestation'],
                                            config.geturl('gnssceche')) for df in marks])
             files.drop_duplicates(inplace=True)
             files.to_csv(targets[0],index=False)
         os.makedirs(config.geturl('process'),exist_ok=True)
         os.makedirs(config.geturl('gnssceche'),exist_ok=True)
-        file_dep =glob.glob(config.geturl('marksource'),recursive=True)
+        file_dep =config.geturl('imagesource').rglob('*.MRK')
         file_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
-        target = os.path.join(config.geturl('process'),'basefiles.csv')
+        target = config.geturl('process') / 'basefiles.csv'
         return {
             'actions':[(calc_basefiles, [])],
             'file_dep':file_dep,
@@ -80,73 +81,77 @@ def task_get_basefiles():
             basefiles = pd.read_csv(dependencies[0])
             getbase(basefiles.to_dict('records'))
         file_dep = os.path.join(config.geturl('process'),'basefiles.csv')
+        bases = pd.read_csv(file_dep)
+        gnss =config.geturl('gnssceche')
+        targets = bases.file.apply(lambda x: gnss / x).to_list()
         return {
             'actions':[calc_basefiles],
             'file_dep':[file_dep],
+            'targets' : targets,
             'uptodate':[True],
             'clean':True,
         }    
      
 @create_after(executed='get_basefiles', target_regex='*')          
 def task_unzip_base():
-        def calc_basefiles(dependencies, targets,cfg,basepath):
-            surveys = pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-            files =pd.concat([getbasenames(df.index,cfg['survey']['basestation'],
-                                           config.geturl('gnssceche')) for survey,df in surveys.groupby('Survey')])
-            files.drop_duplicates(inplace=True)
-            files.to_csv(targets[0],index=False)
-        crx2nxpath = os.path.join(config.geturl('rtklib'),'crx2rnx.exe')
-        gnsspath = config.geturl('gnssceche')
-        file_dep = glob.glob(os.path.join(gnsspath,'*.gz'))
+        file_dep = config.geturl('gnssceche').glob('*.gz')
         file_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
-        zip = config.geturl('7zip')
-        for file in file_dep:
-            yield {
-                'name':file,
-                'actions':[f'"{zip}" e -aos "{file}" -o"{gnsspath}"'],
-                'file_dep':[file],
-                'targets' : [file[:-3]],
-                'uptodate':[run_once],
-            } 
+        if sys.platform.startswith('linux'):
+            for file in file_dep:
+                yield {
+                    'name':file,
+                    'actions':[f'! yes no | gunzip -k -d {file.parent} {file} '],
+                    'file_dep':[file],
+                    'targets' : [file.stem],
+                    'uptodate':[run_once],
+                } 
+        else:
+            zip = config.geturl('7zip')
+            for file in file_dep:
+                yield {
+                    'name':file,
+                    'actions':[f'"{zip}" e -aos "{file}" -o"{gnsspath}"'],
+                    'file_dep':[file],
+                    'targets' : [file[:-3]],
+                    'uptodate':[run_once],
+                } 
 
 @create_after(executed='unzip_base', target_regex='*')    
 def task_crx2rinx_base():
-        def calc_basefiles(dependencies, targets,cfg,basepath):
-            surveys = pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-            files =pd.concat([getbasenames(df.index,cfg['survey']['basestation'],
-                                           config.geturl('gnssceche')) for survey,df in surveys.groupby('Survey')])
-            files.drop_duplicates(inplace=True)
-            files.to_csv(targets[0],index=False)
-        crx2nxpath = config.geturl('crx2rnx')
-        file_dep = glob.glob(os.path.join(config.geturl('gnssceche'),'*.crx'))
-        targets=list(map (lambda x:x.replace('.crx','.rnx'),file_dep))
-        for file,target in zip(file_dep,targets):
-            if not os.path.exists(target):
+        file_dep = config.geturl('gnssceche').glob('*.crx')
+        for file in file_dep:
+            target= file.with_suffix('.rnx')
+            if sys.platform.startswith('linux'):
                 yield {
                     'name':file,
-                    'actions':[f'"{crx2nxpath}" -f "{file}"'],
+                    'actions':[f'crx2rnx -f "{file}"'],
                     'targets':[target],
                     'uptodate':[run_once],
                     'clean':True,
                 }          
-        targets = os.path.join(config.geturl('output'),'merge/surveys.html')
+            else:
+                if not os.path.exists(target):
+                    yield {
+                        'name':file,
+                        'actions':[f'"{crx2nxpath}" -f "{file}"'],
+                        'targets':[target],
+                        'uptodate':[run_once],
+                        'clean':True,
+                    }          
         
 @create_after(executed='crx2rinx_base', target_regex='*')                
 def task_move_nav():
         def move_nav(dependencies, targets):
             gnss_file = targets[0]
             mrk =read_mrk_gpst(dependencies[0])
-            getbasenames(mrk.index,cfg['survey']['basestation'],os.path.dirname(gnss_file)).to_csv(gnss_file,index=True)
-        for item in glob.glob(config.geturl('imagesource'),recursive=True):
-            source = os.path.dirname(item)
-            mark = glob.glob(os.path.join(source,'*Timestamp.MRK'))
-            mark = list(filter(lambda x:os.stat(x).st_size > 0,mark))
-            if mark:
+            getbasenames(mrk.index,config.cfg['basestation'],os.path.dirname(gnss_file)).to_csv(gnss_file,index=True)
+        for item in config.geturl('imagesource').glob('*Timestamp.MRK'):
+            if os.stat(item).st_size>0:
                 yield {
-                    'name':mark[0],
+                    'name':item,
                     'actions':[move_nav],
-                    'file_dep':mark,
-                    'targets':[os.path.join(os.path.dirname(mark[0]),'gnss.csv')],
+                    'file_dep':[item],
+                    'targets':[item.parent / 'gnss.csv'],
                     'clean':True,
                 }          
 @create_after(executed='move_nav', target_regex='*')      
@@ -154,7 +159,7 @@ def task_move_nav_files():
         def move_nav_files(dependencies, targets):
             if os.path.exists(dependencies[0]) & ~os.path.exists(targets[0]):
                 shutil.copy(dependencies[0],targets[0])
-        for item in glob.glob(os.path.join(config.geturl('imagesource'),'gnss.csv'),recursive=True):
+        for item in config.geturl('imagesource').rglob('gnss.csv'):
             sourcepath = config.geturl('gnssceche')
             destpath = os.path.dirname(item)
             files = pd.read_csv(item)
@@ -177,9 +182,8 @@ def task_rtk():
             gnss_file = targets[0]
             mrk =read_mrk_gpst(dependencies[0]).set_index('UTCtime')
             getbasenames(mrk.index,config.cfg['survey']['basestation'],os.path.dirname(gnss_file)).to_csv(gnss_file,index=True)
-        file_dep =glob.glob(config.geturl('obssource'),recursive=True)
+        file_dep =config.geturl('imagesource').rglob('*_Rinex.obs')
         file_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
-        exepath = f'{os.path.join(config.geturl("rtklib"),"rnx2rtkp.exe")}'
         rtkconfig = config.geturl('rtkconfig')
         for file in file_dep:
             base = os.path.join(os.path.dirname(file),'*_15M_01S_MO.rnx')
@@ -216,7 +220,14 @@ def task_calc_pic_pos():
                 'clean':True,
             } 
             
-            
+def run():
+    import sys
+    from doit.cmd_base import ModuleTaskLoader, get_loader
+    from doit.doit_cmd import DoitMain
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp',"continue": True}
+    #print(globals())
+    DoitMain(ModuleTaskLoader(globals())).run(sys.argv[1:]) 
+
         
 if __name__ == '__main__':
     import doit

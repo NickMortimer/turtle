@@ -9,11 +9,11 @@ import pandas as pd
 from doit import create_after
 import numpy as np
 import geopandas as gp
-from utils.drone import P4rtk
-from utils.read_rtk import read_mrk
+from drone import P4rtk
+from read_rtk import read_mrk
 from pyproj import Proj 
-from utils.utils import convert_wgs_to_utm
-import utils.config as config
+from turtledrone.utils.utils import convert_wgs_to_utm
+import config as config
 from pathlib import Path
 import re
 
@@ -24,37 +24,12 @@ def task_set_up():
 
  
 def task_process_mergpos():
-        def process_transect(leg):
-            leg = leg.copy()
-            leg['GPSTime'] = leg.TimeStamp
-            leg = leg[~ leg.TimeStamp.isna()]
-            leg.loc[leg['GPSTime'].duplicated(),'GPSTime']=leg.loc[leg['GPSTime'].duplicated(),'GPSTime']+pd.to_timedelta('500L')
-            leg['GPSDistance'] =((leg['Northing'].diff()**2 + leg['Easting'].diff()**2)**0.5)
-            leg['GpsSpeed']=(((leg['Northing'].diff()**2 + leg['Easting'].diff()**2)**0.5)/leg.GPSTime.diff().dt.total_seconds())
-            leg['timedelta'] = leg.GPSTime.diff().dt.total_seconds()
-            leg['GPSExcessTime'] = ((leg['GpsSpeed']/leg['DroneSpeed']) * leg['timedelta'])-leg['timedelta']
-            leg['GPSExcessTime']=leg['GPSExcessTime'].replace([np.nan,np.inf],0)
-            leg['ImageTime'] = leg.TimeStamp
-            leg['ImageInterval']=leg['ImageTime'].diff().dt.total_seconds()
-            leg.loc[leg['ImageInterval']==2,'ImageTime'] =leg.loc[leg['ImageInterval']==2,'ImageTime'] + pd.to_timedelta('500L')
-            leg['ImageInterval']=leg['ImageTime'].diff().dt.total_seconds()
-            for i in range(1,len(leg)):
-                leg.iloc[i,leg.columns.get_loc('GPSTime')] = leg.iloc[i,leg.columns.get_loc('GPSTime')] + pd.to_timedelta(leg.iloc[i,leg.columns.get_loc('GPSExcessTime')],unit='s')
-                leg['timedelta'] = leg.GPSTime.diff().dt.total_seconds()
-                leg['GpsSpeed']=(((leg['Northing'].diff()**2 + leg['Easting'].diff()**2)**0.5)/leg.GPSTime.diff().dt.total_seconds())
-                leg['GPSExcessTime'] = ((leg['GpsSpeed']/leg['DroneSpeed']) * leg['timedelta'])-leg['timedelta']
-                leg['GPSExcessTime']=leg['GPSExcessTime'].replace([np.nan,np.inf],0)
-            gpstime=leg.GPSTime.astype('int64').astype("float")
-            imagetime= leg.ImageTime.astype('int64').astype('float')
-            leg['ImageNorthing'] =np.interp(imagetime,gpstime,leg.Northing)
-            leg['ImageEasting'] = np.interp(imagetime,gpstime,leg.Easting)
-            leg['ImageDistance'] =((leg['ImageNorthing'].diff()**2 + leg['ImageEasting'].diff()**2)**0.5)
-            leg['ImageSpeed'] =leg['ImageDistance']/leg['ImageInterval']
-            return leg
         def process_json(dependencies, targets):
             # dependencies.sort()
             source_file = list(filter(lambda x: 'exif.csv' in x, dependencies))[0]
-            drone =pd.read_csv(source_file,index_col='Sequence',parse_dates=['TimeStamp'])
+            drone =pd.read_csv(source_file,index_col='Sequence',parse_dates=['TimeStamp']).sort_values('TimeStamp')
+            mrk_file =list(filter(lambda x: '_Timestamp.MRK' in x, dependencies))
+            mrk =read_mrk(mrk_file[0])
             utmcode =convert_wgs_to_utm(drone['Longitude'].mean(),drone['Latitude'].mean())
             utmproj =Proj(f'epsg:{utmcode:1.5}')            
             drone['Easting'],drone['Northing'] =utmproj(drone['Longitude'].values,drone['Latitude'].values)
@@ -67,26 +42,30 @@ def task_process_mergpos():
             drone.loc[drone['Interval']>8,'Leg'] =1
             drone['Leg'] = drone['Leg'].cumsum()
             drone['UtmCode'] =utmcode
-            g = drone.groupby('Leg')
-            drone =pd.concat([process_transect(leg) for name,leg in g])
-            mrk_file =list(filter(lambda x: '_Timestamp.MRK' in x, dependencies))
-            if mrk_file:
-                mrk =read_mrk(mrk_file[0])
-                if len(mrk)>0:
-                    mrk['Easting'],mrk['Northing'] =utmproj(mrk['Longitude'].values,mrk['Latitude'].values)
-                    mrk['EllipsoideHight'] = pd.to_numeric(mrk.EllipsoideHight.str.split(',',expand=True)[0])
-                    mrk =mrk.add_suffix('Mrk')
-                    drone =drone.join(mrk[['UTCTimeMrk','EllipsoideHightMrk','LatitudeMrk','LongitudeMrk','EastingMrk','NorthingMrk']],rsuffix='Mrk')
-            rtk_file=list(filter(lambda x: '_Timestamp.CSV' in x, dependencies))
-            if rtk_file:
-                rtk =pd.read_csv(rtk_file[0],parse_dates=['GPST'],index_col=['Sequence'])
-                rtk['Easting'],rtk['Northing'] =utmproj(rtk['longitude(deg)'].values,rtk['latitude(deg)'].values)
-                rtk =rtk.add_suffix('Rtk')
-                drone =drone.join(rtk,rsuffix='Rtk')
-            drone.set_index('TimeStamp',inplace=True)
-            drone.sort_index(inplace=True)
-            drone = drone[pd.notna(drone.index)]
-            drone.to_csv(targets[0],index=True)
+            mrk['Easting'],mrk['Northing'] =utmproj(mrk['Longitude'].values,mrk['Latitude'].values)
+            mrk['EllipsoideHight'] = pd.to_numeric(mrk.EllipsoideHight.str.split(',',expand=True)[0])
+            mrk =mrk.add_suffix('Mrk')
+            drone =drone.join(mrk[['UTCTimeMrk','EllipsoideHightMrk','LatitudeMrk','LongitudeMrk','EastingMrk','NorthingMrk']],rsuffix='Mrk')
+
+
+
+
+            # g = drone.groupby('Leg')
+            # drone =pd.concat([process_transect(leg) for name,leg in g])
+            # mrk_file =list(filter(lambda x: '_Timestamp.MRK' in x, dependencies))
+            # if mrk_file:
+            #     mrk =read_mrk(mrk_file[0])
+            #     if len(mrk)>0:
+            # rtk_file=list(filter(lambda x: '_Timestamp.CSV' in x, dependencies))
+            # if rtk_file:
+            #     rtk =pd.read_csv(rtk_file[0],parse_dates=['GPST'],index_col=['Sequence'])
+            #     rtk['Easting'],rtk['Northing'] =utmproj(rtk['longitude(deg)'].values,rtk['latitude(deg)'].values)
+            #     rtk =rtk.add_suffix('Rtk')
+            #     drone =drone.join(rtk,rsuffix='Rtk')
+            # drone.set_index('TimeStamp',inplace=True)
+            # drone.sort_index(inplace=True)
+            # drone = drone[pd.notna(drone.index)]
+            # drone.to_csv(targets[0],index=True)
             
 
         for item in config.geturl('imagesource').rglob('.'):
@@ -163,7 +142,13 @@ def task_merge_xif():
                 'targets':[target],
                 'clean':True,
             }
-
+def run():
+    import sys
+    from doit.cmd_base import ModuleTaskLoader, get_loader
+    from doit.doit_cmd import DoitMain
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp',"continue": True}
+    #print(globals())
+    DoitMain(ModuleTaskLoader(globals())).run(sys.argv[1:])
 
 if __name__ == '__main__':
     import doit

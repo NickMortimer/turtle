@@ -9,11 +9,11 @@ import pandas as pd
 from doit import create_after
 import numpy as np
 import geopandas as gp
-from utils.drone import P4rtk
+from drone import P4rtk
 from pyproj import Proj 
 
-from  utils.utils import convert_wgs_to_utm
-import utils.config as config
+from  turtledrone.utils.utils import convert_wgs_to_utm
+import config as config
 
 
  
@@ -69,19 +69,15 @@ def task_process_mergpos():
             drone.sort_index(inplace=True)
             drone = drone[pd.notna(drone.index)]
             drone.to_csv(list(targets)[0],index=True)
-            
 
-        for item in glob.glob(config.geturl('imagesource'),recursive=True):
-            file_dep  =  list(filter(lambda x:  any(f in x for f in ['exif.csv','Timestamp']), glob.glob(os.path.join(item,'*.*'))))
-            if file_dep:
-                target =   os.path.join(item,'position.csv')           
-                yield {
-                    'name':target,
-                    'actions':[process_json],
-                    'file_dep':file_dep,
-                    'targets':[target],
-                    'clean':True,
- 
+        for item in config.geturl('imagesource').rglob('exif.csv'):
+            target =   item.parent / 'position.csv'           
+            yield {
+                'name':target,
+                'actions':[process_json],
+                'file_dep':[item],
+                'targets':[target],
+                'clean':True, 
                }    
 @create_after(executed='process_mergpos', target_regex='*.csv')      
 def task_addpolygons():
@@ -141,7 +137,13 @@ def task_merge_xif():
 # def task_calculate_newname():
 #     pass
 #xifdata.apply(lambda item: f"{survey['dronetype']}_{survey['camera']}_{survey['country']}_{survey['surveycode']}_{survey['surveynumber']:03}_{item.LocalTime}_{item.Counter:04}.JPG", axis=1)       
- 
+def run():
+    import sys
+    from doit.cmd_base import ModuleTaskLoader, get_loader
+    from doit.doit_cmd import DoitMain
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp',"continue": True}
+    #print(globals())
+    DoitMain(ModuleTaskLoader(globals())).run(sys.argv[1:]) 
 
 if __name__ == '__main__':
     import doit

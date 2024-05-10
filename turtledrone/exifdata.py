@@ -98,6 +98,14 @@ def task_process_json():
                 'targets':[target],
                 'clean':True,
             }
+
+def run():
+    import sys
+    from doit.cmd_base import ModuleTaskLoader, get_loader
+    from doit.doit_cmd import DoitMain
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp',"continue": True}
+    #print(globals())
+    DoitMain(ModuleTaskLoader(globals())).run(sys.argv[1:])          
         
 if __name__ == '__main__':
     import doit

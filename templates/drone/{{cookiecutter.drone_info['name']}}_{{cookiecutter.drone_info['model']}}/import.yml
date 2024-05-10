@@ -1,0 +1,14 @@
+field_trip_id : {{cookiecutter.field_trip_id}}
+start_date : {{cookiecutter.start_date}}
+end_date : {{cookiecutter.end_date}}
+custodian : {{cookiecutter.custodian}}
+email : {{cookiecutter.email}}
+project_name : {{cookiecutter.project_name}}
+instrument : drone
+{% raw %}
+import_date : {{importdate}}
+import_token : {{importtoken}}
+import_template : "{instrument_path}/raw/{import_date}/{import_token}"
+{% endraw %}
+
+

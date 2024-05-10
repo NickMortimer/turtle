@@ -1,0 +1,13 @@
+{
+    "drone_info": [{"name":"RAP126","model":"DJIP4Pro","camera_type":"RGB"},
+                   {"name":"RAP127","model":"DJIP4RTK","camera_type":"RGB"},
+                   {"name":"UWACOD_M300","model":"DJIM300","camera_type":"RGB"}],
+    "field_trip_id" : "",
+    "start_date" : "",
+    "end_date":"",
+    "custodian":"",
+    "email":"",
+    "project_name" : "",
+    "country_code" : ""
+
+}

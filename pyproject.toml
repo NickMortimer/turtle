@@ -13,9 +13,14 @@ python = "^3.9"
 sphinx = "^7.2.6"
 sphinx-rtd-theme = "^2.0.0"
 nbsphinx = "^0.9.3"
+chardet = "^5.2.0"
+typer = "^0.12.0"
+cookiecutter = "^2.6.0"
+pysftp = "^0.2.9"
 
 [tool.poetry.scripts]
-initalise = 'turtledrone:initalise'
+initailise = 'turtledrone:initailise'
+tdrone =' turtledrone.tdrone:tdrone'
 exifdata = 'turtledrone:exifdata'
 DJIP4RTK = 'turtledrone:DJIP4RTK'
 setsurveyarea = 'turtledrone:setsurveyarea'

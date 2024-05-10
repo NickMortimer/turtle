@@ -97,7 +97,7 @@ def read_mrk(filename,leapseconds=37,index='Sequence'):
         data['Longitude']=data.Longitude.str.split(',',expand=True)[0].astype(float)
         data['GPSWeekNumber']=data.GPSWeekNumber.str[1:-1].astype(int)
         data['UTCTime'] =data.apply(lambda x: pd.to_datetime("1980-01-06 00:00:00")+pd.Timedelta(weeks=x['GPSWeekNumber'])+pd.Timedelta(seconds=x.GPSSecondOfWeek)
-                                    -pd.Timedelta(seconds=leapseconds),axis=1)
+                                    +pd.Timedelta(seconds=leapseconds),axis=1)
         data.set_index(index,inplace=True)
     return data 
 def read_mrk_gpst(filename,index='UTCTime'):
