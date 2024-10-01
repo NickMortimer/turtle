@@ -15,7 +15,10 @@ from pyproj import Proj
 from turtledrone.utils.utils import convert_wgs_to_utm
 import config as config
 from pathlib import Path
+import cameratransform as ct
 import re
+from shapely.geometry import point
+from shapely.geometry import Polygon
 
 
 
@@ -29,23 +32,32 @@ def task_process_mergpos():
             source_file = list(filter(lambda x: 'exif.csv' in x, dependencies))[0]
             drone =pd.read_csv(source_file,index_col='Sequence',parse_dates=['TimeStamp']).sort_values('TimeStamp')
             mrk_file =list(filter(lambda x: '_Timestamp.MRK' in x, dependencies))
-            mrk =read_mrk(mrk_file[0])
+            if mrk_file:
+                mrk =read_mrk(mrk_file[0])
             utmcode =convert_wgs_to_utm(drone['Longitude'].mean(),drone['Latitude'].mean())
             utmproj =Proj(f'epsg:{utmcode:1.5}')            
-            drone['Easting'],drone['Northing'] =utmproj(drone['Longitude'].values,drone['Latitude'].values)
+            drone['EastingXif'],drone['NorthingXif'] =utmproj(drone['Longitude'].values,drone['Latitude'].values)
             drone['LocalTime']=drone.TimeStamp
             drone['Interval']=drone.LocalTime.diff().dt.total_seconds()
-            drone['GpsDist']=(drone['Northing'].diff()**2 + drone['Easting'].diff()**2)**0.5
-            drone['GpsSpeed']=((drone['Northing'].diff()**2 + drone['Easting'].diff()**2)**0.5)/drone['Interval']
-            drone['DroneSpeed'] = (drone['SpeedX']**2+drone['SpeedY']**2)**0.5
+            drone['GpsDist']=(drone['NorthingXif'].diff()**2 + drone['EastingXif'].diff()**2)**0.5
+            drone['GpsSpeed']=((drone['NorthingXif'].diff()**2 + drone['EastingXif'].diff()**2)**0.5)/drone['Interval']
+            if 'SpeedX' in drone.columns:
+                drone['DroneSpeed'] = (drone['SpeedX']**2+drone['SpeedY']**2)**0.5
             drone['Leg'] =0
             drone.loc[drone['Interval']>8,'Leg'] =1
             drone['Leg'] = drone['Leg'].cumsum()
             drone['UtmCode'] =utmcode
-            mrk['Easting'],mrk['Northing'] =utmproj(mrk['Longitude'].values,mrk['Latitude'].values)
-            mrk['EllipsoideHight'] = pd.to_numeric(mrk.EllipsoideHight.str.split(',',expand=True)[0])
-            mrk =mrk.add_suffix('Mrk')
-            drone =drone.join(mrk[['UTCTimeMrk','EllipsoideHightMrk','LatitudeMrk','LongitudeMrk','EastingMrk','NorthingMrk']],rsuffix='Mrk')
+            if mrk_file:
+                mrk['Easting'],mrk['Northing'] =utmproj(mrk['Longitude'].values,mrk['Latitude'].values)
+                mrk['EllipsoideHight'] = pd.to_numeric(mrk.EllipsoideHight.str.split(',',expand=True)[0])
+                mrk =mrk.add_suffix('Mrk')
+                drone =drone.join(mrk[['UTCTimeMrk','EllipsoideHightMrk','LatitudeMrk','LongitudeMrk','EastingMrk','NorthingMrk']],rsuffix='Mrk')
+                drone['ImageEasting']= drone['EastingMrk']
+                drone['ImageNorthing'] = drone['NorthingMrk']
+            else:
+                drone['ImageEasting'] = drone['EastingXif']
+                drone['ImageNorthing'] = drone['NorthingXif']
+
 
 
 
@@ -65,15 +77,16 @@ def task_process_mergpos():
             # drone.set_index('TimeStamp',inplace=True)
             # drone.sort_index(inplace=True)
             # drone = drone[pd.notna(drone.index)]
-            # drone.to_csv(targets[0],index=True)
+            drone.to_csv(targets[0],index=True)
             
-
-        for item in config.geturl('imagesource').rglob('.'):
-            source = list(item.glob('*.*'))
-            if source:
-                file_dep  =  list(filter(lambda x:  any(f in x.name for f in ['exif.csv','Timestamp']), source))
-                fild_dep = list(filter(lambda x:os.stat(x).st_size > 0,file_dep))
-                target =   item / 'position.csv'   
+        directories_with_survey = [p for p in config.geturl('imagesource').rglob('*SURVEY*') if p.is_dir()]
+        for item in directories_with_survey:
+            source = list(item.glob('**/exif.csv'))
+            for exiffile in source:
+                file_dep = list(exiffile.parent.glob('*.MRK'))
+                file_dep.append(exiffile)
+                file_dep = list(filter(lambda x:x.stat().st_size > 0,file_dep))
+                target =   exiffile.parent / 'position.csv'   
                 if list(filter(lambda x: 'exif.csv' in x.name,file_dep)):        
                     yield {
                         'name':target,
@@ -86,20 +99,40 @@ def task_process_mergpos():
 def task_addpolygons():
     def process_polygons(dependencies, targets):
         def getpoly(item):
-            if 'DewarpData' in item.keys():
-                drone =P4rtk(pd.to_numeric(re.split(';|,',item.DewarpData)[1:]),crs,item.ImageWidth,item.ImageHeight)
-            elif 'CalibratedOpticalCenterX' in item.keys():
-                    drone =P4rtk([item.CalibratedFocalLength,
-                                 item.CalibratedOpticalCenterX,item.CalibratedOpticalCenterY],crs,item.ImageWidth,item.ImageHeight)
+            if 'K1' in item.keys():
+                cam = ct.Camera(ct.RectilinearProjection(focallength_x_px=item.CalibratedFocalLengthX,
+                                                                     focallength_y_px=item.CalibratedFocalLengthY,
+                                                                        center_x_px=item.CalibratedOpticalCenterX,
+                                                                        center_y_px=item.CalibratedOpticalCenterY),
+                                                                        orientation= ct.SpatialOrientation(tilt_deg=item.GimbalPitchDegree+90,
+                                                                                                        elevation_m=item.RelativeAltitude,
+                                                                                                        roll_deg=item.GimbalRollDegree,
+                                                                                                        heading_deg=item.GimbalYawDegree),
+                                                                        lens=ct.BrownLensDistortion(item.K1,item.K2,item.K3))
             else:
-                pass
-            drone.setdronepos(item.Easting,item.Northing,item.RelativeAltitude,
-                                  item.GimbalPitchDegree,item.GimbalRollDegree,item.GimbalYawDegree)
-            return drone.getimagepolygon()
+                cam = ct.Camera(ct.RectilinearProjection(focallength_px=item.CalibratedFocalLength,
+                                                                    center_x_px=item.CalibratedOpticalCenterX,
+                                                                    center_y_px=item.CalibratedOpticalCenterY),
+                                                                    orientation= ct.SpatialOrientation(tilt_deg=item.GimbalPitchDegree+90,
+                                                                                                    elevation_m=item.RelativeAltitude,
+                                                                                                    roll_deg=item.GimbalRollDegree,
+                                                                                                   heading_deg=item.GimbalYawDegree))
+            perside=10 
+            x = np.linspace(0, item.ImageWidth, num=perside)  
+            y = np.linspace(0, item.ImageHeight, num=perside)
+            bottom = np.dstack((x,np.ones(perside)*item.ImageHeight-1))[0]
+            right = np.dstack((np.ones(perside)*item.ImageWidth-1,y[::-1]))[0]
+            top = np.dstack((x[::-1],np.zeros(perside)))[0]
+            left = np.dstack((np.zeros(perside),y))[0]
+            points = np.vstack((bottom,right,top,left))
+            polydata =cam.spaceFromImage(points)
+            polydata[:,0] =item.ImageEasting + polydata[:,0] 
+            polydata[:,1] =item.ImageNorthing +polydata[:,1]
+            return Polygon(polydata[:,0:2])
         data = pd.read_csv(dependencies[0],parse_dates=['TimeStamp'])
         crs = f'epsg:{int(data["UtmCode"][0])}'
-        gdf = gp.GeoDataFrame(data, geometry=gp.points_from_xy(data.Easting, data.Northing),crs=crs)
-        
+        gdf = gp.GeoDataFrame(data, geometry=gp.points_from_xy(data.ImageEasting, data.ImageNorthing),crs=crs)
+        gdf = gdf[~gdf.geometry.is_empty]
         gdf['ImagePolygon'] = gdf.apply(getpoly,axis=1)
         gdf.to_csv(targets[0])
         

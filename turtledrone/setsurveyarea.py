@@ -9,11 +9,10 @@ import numpy as np
 import geopandas as gp
 from geopandas.tools import sjoin
 from shapely.geometry import MultiPoint
-import utils.config as config
-from utils.utils import convert_wgs_to_utm
+import turtledrone.config as config
+from turtledrone.utils.utils import convert_wgs_to_utm
 from doit import create_after
-from turtledrone.process.initalise import task_make_area_list
-from turtledrone.process.initalise import task_make_grids
+
 
 # def task_make_grids():
 #     def process_grid(dependencies, targets,gridsize=10):
@@ -108,6 +107,7 @@ def task_assign_area():
             surveyfile = list(filter(lambda x: 'surveys.csv' in x, dependencies))[0]
             areafile = list(filter(lambda x: 'surveyareas.csv' in x, dependencies))[0]
             drone =pd.read_csv(surveyfile,index_col='TimeStamp',parse_dates=['TimeStamp'])
+            drone = drone[~drone.ImageNorthing.isna() | ~drone.ImageEasting.isna() ]
             pnts = gp.GeoDataFrame(drone,geometry=gp.points_from_xy(drone.Longitude, drone.Latitude),crs='EPSG:4326')
             pnts.Survey = pnts.Survey.astype('int')
             areas =pd.read_csv(areafile)
@@ -131,6 +131,14 @@ def task_assign_area():
             'targets':[target],
             'clean':True,
         }       
+
+def run():
+    import sys
+    from doit.cmd_base import ModuleTaskLoader, get_loader
+    from doit.doit_cmd import DoitMain
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp',"continue": True}
+    #print(globals())
+    DoitMain(ModuleTaskLoader(globals())).run(sys.argv[1:]) 
 
 if __name__ == '__main__':
     import doit

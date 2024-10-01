@@ -177,7 +177,12 @@ def process(config : str= typer.Argument(None, help="path to config file")):
                     getattr(module,dronecfg['drone_type'] ).run()
                 except:
                     raise typer.Abort(f"Processor {dronecfg['processor']} not found")
-
+                from turtledrone import setsurveyarea
+                setsurveyarea.run()
+                from turtledrone import surveys
+                surveys.run()
+                from turtledrone import reports
+                reports.run()
 
 
     #init.run()

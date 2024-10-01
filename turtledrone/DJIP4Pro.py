@@ -96,7 +96,7 @@ def task_addpolygons():
         
         
 
-    dewarp = pd.to_numeric(config.cfg['survey']['dewarp'] )
+    dewarp = pd.to_numeric(config.cfg['dewarp'] )
     for file_dep in glob.glob(os.path.join(config.geturl('imagesource'),'position.csv'),recursive=True):
         target = os.path.join(os.path.dirname(file_dep),'polygons.csv')   
         yield {

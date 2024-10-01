@@ -34,7 +34,9 @@ def task_create_json():
         """
         exifpath = os.path.join(config.geturl('exiftool'))
         for item in config.geturl('imagesource').rglob('.'):
-            file_dep = list(item.glob(config.cfg['imagewild']))
+            file_dep = list(item.glob(config.cfg['imagewild'].upper()))
+            if len(file_dep)==0:
+                file_dep = list(item.glob(config.cfg['imagewild'].lower()))
             if len(file_dep)>0:
                 target  = item /'exif.json'
                 if file_dep:
@@ -84,6 +86,18 @@ def task_process_json():
                     sourcepath = config.CATALOG_DIR
                     drone['SourceRel'] =drone.SourceFile.apply(lambda x: os.path.relpath(x,start=sourcepath))
                     drone['Sequence'] =drone.SourceFile.str.extract('(?P<Sequence>\d+)\.(jpg|JPG)')['Sequence']
+                    # ok lets breakout the calibrations
+                    if ('DewarpData' in drone.columns) and (~drone['DewarpData'].isna().max()):
+                        drone[['CalibrationDate','CalibratedFocalLengthX','CalibratedFocalLengthY','CalibratedOpticalCenterX','CalibratedOpticalCenterY',
+                                    'K1','K2','P1',"P2","K3"]] = drone['DewarpData'].str.split(r'[;,]',expand=True)
+                        drone[['CalibratedFocalLengthX','CalibratedFocalLengthY','CalibratedOpticalCenterX','CalibratedOpticalCenterY',
+                                    'K1','K2','P1',"P2","K3"]] = drone[['CalibratedFocalLengthX','CalibratedFocalLengthY','CalibratedOpticalCenterX','CalibratedOpticalCenterY',
+                                    'K1','K2','P1',"P2","K3"]].astype(float)
+                        drone['CalibratedOpticalCenterX'] = (drone['ImageWidth']/2)+drone['CalibratedOpticalCenterX']
+                        drone['CalibratedOpticalCenterY'] = (drone['ImageHeight']/2)+drone['CalibratedOpticalCenterY']
+                    elif not ('DewarpFlag' in drone.columns): 
+                        drone[['CalibratedOpticalCenterX','CalibratedOpticalCenterY','CalibratedFocalLength']]  = [2432,1824,3666.665]
+                    
                     drone.set_index('Sequence',inplace=True)
                     drone.to_csv(list(targets)[0],index=True)
             

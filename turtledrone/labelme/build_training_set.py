@@ -4,7 +4,6 @@ import numpy as np
 import json
 from PIL import Image
 from tqdm import tqdm
-import utils.config as config
 import doit
 from doit.action import CmdAction
 from doit import create_after

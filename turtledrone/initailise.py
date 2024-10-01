@@ -50,40 +50,40 @@ def task_make_area_list():
             'clean':True,
         } 
         
-@create_after(executed='make_area_list')         
-def task_make_grids():
-    """
-        make a grid that can be used to extract tiles from the images
-    """
-    def process_grid(dependencies, targets,gridsize=10):
-        area = gp.read_file(dependencies[0])
-        if len(area.dropna())>0:
-            utmcode = convert_wgs_to_utm(area.iloc[0].geometry.exterior.coords.xy[0][0],area.iloc[0].geometry.exterior.coords.xy[1][0])
-            crs = f'epsg:{utmcode}' 
-            polygon = area.to_crs(crs).iloc[0].geometry
-            eastings =polygon.exterior.coords.xy[0]
-            northings =polygon.exterior.coords.xy[1]
-            easting =np.arange(np.min(eastings) -np.min(eastings) % gridsize,np.max(eastings) -np.max(eastings) % gridsize,gridsize)
-            northing=np.arange(np.min(northings) -np.min(northings) % gridsize,np.max(northings) -np.max(northings) % gridsize,gridsize)
-            xi,yi = np.meshgrid(easting,northing)
-            points =  MultiPoint(list(zip(xi.ravel(),yi.ravel())))
-            p =points.intersection(polygon)
-            d = {'Grid': [f'{gridsize}m'], 'geometry': [p]}
-            df =gp.GeoDataFrame(d, crs=crs)
-            df.to_file(targets[0])    
-        else:
-            raise typer.Abort(f'No ploygon inside file {dependencies[0]}')
+# @create_after(executed='make_area_list')         
+# def task_make_grids():
+#     """
+#         make a grid that can be used to extract tiles from the images
+#     """
+#     def process_grid(dependencies, targets,gridsize=10):
+#         area = gp.read_file(dependencies[0])
+#         if len(area)>0:
+#             utmcode = convert_wgs_to_utm(area.iloc[0].geometry.exterior.coords.xy[0][0],area.iloc[0].geometry.exterior.coords.xy[1][0])
+#             crs = f'epsg:{utmcode}' 
+#             polygon = area.to_crs(crs).iloc[0].geometry
+#             eastings =polygon.exterior.coords.xy[0]
+#             northings =polygon.exterior.coords.xy[1]
+#             easting =np.arange(np.min(eastings) -np.min(eastings) % gridsize,np.max(eastings) -np.max(eastings) % gridsize,gridsize)
+#             northing=np.arange(np.min(northings) -np.min(northings) % gridsize,np.max(northings) -np.max(northings) % gridsize,gridsize)
+#             xi,yi = np.meshgrid(easting,northing)
+#             points =  MultiPoint(list(zip(xi.ravel(),yi.ravel())))
+#             p =points.intersection(polygon)
+#             d = {'Grid': [f'{gridsize}m'], 'geometry': [p]}
+#             df =gp.GeoDataFrame(d, crs=crs)
+#             df.to_file(targets[0])    
+#         else:
+#             raise typer.Abort(f'No ploygon inside file {dependencies[0]}')
 
-    file_dep = config.geturl('surveyarea').resolve().rglob('*_AOI.shp')
-    for file in file_dep:
-        target = file.parent / file.name.replace('_AOI.shp','_Grid.shp')
-        yield {
-            'name':target,
-            'actions':[(process_grid,[],{'gridsize':int(config.cfg['gridsize'])})],
-            'file_dep':[file],
-            'targets':[target],
-            'clean':True,
-        }         
+#     file_dep = config.geturl('surveyarea').resolve().rglob('*_AOI.shp')
+#     for file in file_dep:
+#         target = file.parent / file.name.replace('_AOI.shp','_Grid.shp')
+#         yield {
+#             'name':target,
+#             'actions':[(process_grid,[],{'gridsize':int(config.cfg['gridsize'])})],
+#             'file_dep':[file],
+#             'targets':[target],
+#             'clean':True,
+#         }         
 def run():
     import sys
     from doit.cmd_base import ModuleTaskLoader, get_loader

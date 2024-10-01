@@ -27,11 +27,12 @@ def task_make_surveys():
         def process_surveys(dependencies, targets):
             drone =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
             for name,data in drone.groupby('Survey'):
+                data =data.loc[data.index.dropna()]
                 data['Counter'] = 1
                 data['Counter'] = data['Counter'].cumsum()
                 #data['SurveyId'] =f'{data.id.max()}_{data.index.min().strftime("%Y%m%dT%H%M")}'
                 data['Extension']=data['SourceFile'].apply(lambda x: os.path.splitext(x)[1]).str.upper()
-                data['NewName']=data.apply(lambda item: f"{config.cfg['dronetype']}_{config.cfg['cameratype']}_{config.cfg['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
+                data['NewName']=data.apply(lambda item: f"{config.cfg['drone_type']}_{config.cfg['camera_type']}_{config.cfg['country']}_{item.id}_{item.name.strftime('%Y%m%dT%H%M%S')}_{item.Counter:04}{item['Extension']}", axis=1)
                 filename = os.path.join(config.geturl('process'),f"{data['SurveyId'].min()}_survey.csv")                
                 data.to_csv(filename,index=True)
         def clean():
@@ -65,8 +66,8 @@ def task_calculate_survey_areas():
     
     def calculate_area(dependencies, targets):
         data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-        crs = f'epsg:{int(data["UtmCode"][0])}'
-        survey = data['SurveyId'][0]
+        crs = f'epsg:{int(data["UtmCode"].iloc[0])}'
+        survey = data['SurveyId'].iloc[0]
         gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(shapely.wkt.loads),crs=crs)
         gdf['ImagePolygon'] = data.ImagePolygon.apply(shapely.wkt.loads)
         gdf['SurveyAreaHec'] = survey_area(gdf)/10000
@@ -177,7 +178,13 @@ def task_move_summary():
             'uptodate': [True],
             'clean':True,
         }  
-
+def run():
+    import sys
+    from doit.cmd_base import ModuleTaskLoader, get_loader
+    from doit.doit_cmd import DoitMain
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp',"continue": True}
+    #print(globals())
+    DoitMain(ModuleTaskLoader(globals())).run(sys.argv[1:]) 
 
 if __name__ == '__main__':
     import doit

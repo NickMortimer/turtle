@@ -16,7 +16,7 @@ import shapely.wkt
 from shapely.geometry import MultiPolygon
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
-import utils.config as config
+import turtledrone.config as config
 import shutil
 
 
@@ -159,8 +159,8 @@ def task_geopgk_survey():
     def process_geo(dependencies, targets):
         data =pd.read_csv(dependencies[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
         if "UtmCode" in data.columns:
-            crs = f'epsg:{int(data["UtmCode"][0])}'
-            survey = data['SurveyId'][0]
+            crs = f'epsg:{int(data["UtmCode"].iloc[0])}'
+            survey = data['SurveyId'].iloc[0]
             gdf = gp.GeoDataFrame(data, geometry=data.ImagePolygon.apply(lambda x: shapely.wkt.loads(x)),crs=crs)
 
             if os.path.exists(targets[0]):
@@ -221,30 +221,36 @@ def task_html_report():
             'clean':True,
         }  
 
-def task_data_summary():
-    """
-    create a summary list of the flights with 
-    """
-    def process_surveys(dependencies, targets):
-        drone =pd.concat([pd.read_csv(file,index_col='SurveyId',parse_dates=['StartTime','EndTime']) for file in dependencies])
-        drone['ElapsedTime'] = drone.EndTime - drone.StartTime 
-        drone['ElapsedTime'] = (drone['ElapsedTime'].dt.total_seconds()).astype(int) /60
-        drone['SurveyRate'] =  drone.Area /drone.ElapsedTime 
-        drone = drone.sort_index()
-        drone.to_csv(targets[0]) 
+# def task_data_summary():
+#     """
+#     create a summary list of the flights with 
+#     """
+#     def process_surveys(dependencies, targets):
+#         drone =pd.concat([pd.read_csv(file,index_col='SurveyId',parse_dates=['StartTime','EndTime']) for file in dependencies])
+#         drone['ElapsedTime'] = drone.EndTime - drone.StartTime 
+#         drone['ElapsedTime'] = (drone['ElapsedTime'].dt.total_seconds()).astype(int) /60
+#         drone['SurveyRate'] =  drone.Area /drone.ElapsedTime 
+#         drone = drone.sort_index()
+#         drone.to_csv(targets[0]) 
 
         
-    surveys = os.path.join(config.geturl('surveysource'),'*survey_area_data_summary.csv')
-    file_dep = glob.glob(surveys,recursive=True)
-    os.makedirs(config.geturl('reports'),exist_ok=True)
-    target = f"{config.geturl('reports')}/survey_area_data_summary.csv"
-    return {
-        'actions':[process_surveys],
-        'file_dep':file_dep,
-        'targets':[target],
-        'clean':True,
-    } 
-
+#     surveys = os.path.join(config.geturl('output'),'*survey_area_data_summary.csv')
+#     file_dep = glob.glob(surveys,recursive=True)
+#     os.makedirs(config.geturl('reports'),exist_ok=True)
+#     target = f"{config.geturl('reports')}/survey_area_data_summary.csv"
+#     return {
+#         'actions':[process_surveys],
+#         'file_dep':file_dep,
+#         'targets':[target],
+#         'clean':True,
+#     } 
+def run():
+    import sys
+    from doit.cmd_base import ModuleTaskLoader, get_loader
+    from doit.doit_cmd import DoitMain
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp',"continue": True}
+    #print(globals())
+    DoitMain(ModuleTaskLoader(globals())).run(sys.argv[1:]) 
         
 if __name__ == '__main__':
     import doit
