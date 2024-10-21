@@ -9,6 +9,9 @@ from doit.action import CmdAction
 from doit import create_after
 from pathlib import Path
 import ast
+from turtledrone import config
+from PIL import ImageDraw
+import yaml
 
 
 
@@ -45,10 +48,10 @@ def circle_to_bbox(circle_ann, img_width, img_height):
     radius = ((center[0] - edge[0])**2 + (center[1] - edge[1])**2)**0.5
 
     # Calculate the bounding box coordinates
-    x_min = center[0] - radius*1.3
-    y_min = center[1] - radius*1.3
-    x_max = center[0] + radius*1.3
-    y_max = center[1] + radius*1.3
+    x_min = center[0] - radius*1.5
+    y_min = center[1] - radius*1.5
+    x_max = center[0] + radius*1.5
+    y_max = center[1] + radius*1.5
 
     # Convert the bounding box coordinates to integers
     bbox = [int(x_min), int(y_min), int(x_max), int(y_max)]
@@ -167,6 +170,8 @@ def bbox_to_yolo_format(x_min, y_min, x_max, y_max, patch_width, patch_height):
 
 def bbox_to_patch_yolo(bbox, patch_x, patch_y, patch_width, patch_height, class_labels, label):
     x_min, y_min, x_max, y_max = bbox
+    x_min, x_max = min(x_min, x_max), max(x_min, x_max)
+    y_min, y_max = min(y_min, y_max), max(y_min, y_max)
     class_id = class_labels.get(label, None)
     # Clamp the coordinates to be within the patch
     x_min_clamped = max(x_min, patch_x)
@@ -227,6 +232,7 @@ def task_process_json():
                         detections.append({'JsonFile':json_file, 'Label':label, 'Points':points, 'BoundingBox':bbox,'ImageFile':imagefile, 'Key':imagefile.stem})
         data = pd.DataFrame(detections)
         data[['Area','DateStamp']]=data.Key.str.split('_',expand=True)[[3,4]]
+        Path(targets[0]).parent.mkdir(parents=True,exist_ok=True)
         data.sort_values('Key').to_csv(targets[0],index=False)
 
     file_dep =list((config.geturl('output') / config.cfg['country']).rglob('*.json'))
@@ -241,41 +247,108 @@ def task_process_json():
 
 @create_after(executed='process_json', target_regex='*.csv')    
 def task_make_taining():
+    def draw_boxes(image, boxes):
+        # Load the image
+        draw = ImageDraw.Draw(image)
+        img_width, img_height = image.size
+        for box in boxes:
+            parts = box.strip().split()
+            class_id = int(parts[0])
+            x_center = float(parts[1])
+            y_center = float(parts[2])
+            width = float(parts[3])
+            height = float(parts[4])
+
+            # Convert YOLO format to bounding box coordinates
+            x_min = (x_center - width / 2) * img_width
+            y_min = (y_center - height / 2) * img_height
+            x_max = (x_center + width / 2) * img_width
+            y_max = (y_center + height / 2) * img_height
+
+            # Draw the bounding box
+            draw.rectangle([x_min, y_min, x_max, y_max], outline="red", width=2)
+            return image
+
+
     def process_images_and_save_patches(dependencies, targets):
+        def file_images(df,set_name,class_labels):
+            patch_path = config.geturl('trainpath') / 'yolo' / set_name /'images'
+            qc_path = config.geturl('trainpath') / 'yolo' / set_name /'qc'
+            qc_path.mkdir(parents=True,exist_ok=True)
+            patch_path.mkdir(parents=True,exist_ok=True)
+            patch_annotation_path = config.geturl('trainpath') / 'yolo' /set_name /  'labels'
+            patch_annotation_path.mkdir(parents=True,exist_ok=True)
+            patch_size = int(config.cfg['patch_size'])
+            for key, group in tqdm(df.sample(frac=0.1, random_state=42).groupby('Key'), desc="Processing background images and saving patches"):
+                # Open the image and convert to numpy array
+                image = Image.open(group.ImageFile.iloc[0])
+                if len(group) == 1:
+                    bbox=group.iloc[0].BoundingBox
+                    width = abs(bbox[0]-bbox[2])+5
+                    height = abs(bbox[1]-bbox[3])+5
+                    randx = np.random.randint(0,patch_size-width)
+                    randy = np.random.randint(0,patch_size-height)
+                    xmin = np.max([bbox[0],bbox[2]])+randx
+                    ymin = np.min([bbox[1],bbox[3]])+randy
+                    xmax = xmin+patch_size
+                    ymax = ymin+patch_size
+                    stamp =image.crop([xmin,ymin,xmax,ymax])
+                    patch_filename = patch_path / f"{key}_patch_background.jpg"
+                    if not bbox_to_patch_yolo(bbox,xmin,ymin,patch_size,patch_size,class_labels,group.iloc[0].Label):
+                        stamp.save(patch_filename)
+            for key, group in tqdm(df.groupby('Key'), desc="Processing images and saving patches"):
+                # Open the image and convert to numpy array
+                image = Image.open(group.ImageFile.iloc[0])
+                if len(group) == 1:
+                    bbox=group.iloc[0].BoundingBox
+                    width = abs(bbox[0]-bbox[2])+5
+                    height = abs(bbox[1]-bbox[3])+5
+                    randx = np.random.randint(0,patch_size-width)
+                    randy = np.random.randint(0,patch_size-height)
+                    xmin = np.min([bbox[0],bbox[2]])-randx
+                    ymin = np.min([bbox[1],bbox[3]])-randy
+                    xmax = xmin+patch_size
+                    ymax = ymin+patch_size
+                    stamp =image.crop([xmin,ymin,xmax,ymax])
+                    patch_filename = patch_path / f"{key}_patch_1.jpg"
+                    stamp.save(patch_filename)
+                    yolo = bbox_to_patch_yolo(bbox,xmin,ymin,patch_size,patch_size,class_labels,'turtle')
+                    with open((patch_annotation_path / patch_filename.name).with_suffix('.txt') , 'w') as f:
+                        f.writelines([f"{text}\n" for text in yolo])
+                    boximage =draw_boxes(stamp,yolo)
+                    boximage.save(qc_path / patch_filename.name)
+
+
+
+
+
         #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------_df, image_folder, patch_size, overlap, class_labels, output_folder):
         # Ensure output directories exist
-        patch_path = config.geturl('trainpath') / 'yolo' / 'images'
-        os.makedirs(patch_path, exist_ok=True)
-        patch_annotation_path = config.geturl('trainpath') / 'yolo' /  'labels'
-        os.makedirs(patch_annotation_path, exist_ok=True)
-        patch_size = int(config.cfg['patch_size'])
-        overlap = int(config.cfg['overlap'])
+
+
 
         # Iterate over images
         detections_df = pd.read_csv(dependencies[0]).dropna(subset='BoundingBox')
-        detections_df['BoundingBox'] = detections_df['BoundingBox'].apply(ast.literal_eval)
         class_labels = generate_class_labels(detections_df)
-        for key, group in tqdm(detections_df.groupby('Key'), desc="Processing images and saving patches"):
-            # Open the image and convert to numpy array
-            image_np = np.array(Image.open(group.ImageFile.iloc[0]))
-            
-            # Process and split each image into patches with annotations
-            patches, patch_annotations = split_image_into_patches_with_annotations(group, image_np, patch_size, overlap, class_labels)
-         
-            # Save each patch and its annotations---------------------------------
-            for i, (patch, annotation_texts) in enumerate(zip(patches, patch_annotations)):
-                if len(annotation_texts)>0:
-                    patch_filename = f"{key}_patch_{i}.jpg"
-                    patch_annotation_filename = f"{key}_patch_{i}.txt"   
-                    Image.fromarray(patch).save(patch_path / patch_filename )  # Save image patch
-                    # Save YOLO annotations if available
-                    with open(patch_annotation_path / patch_annotation_filename , 'w') as f:
-                        f.writelines([f"{text}\n" for text in annotation_texts])
+        class_labels['turtle'] = 3
+        detections_df['BoundingBox'] = detections_df['BoundingBox'].apply(ast.literal_eval)
+        # Define the fraction for the first group
+        frac = pd.to_numeric(config.cfg['verify'])
+        # Randomly sample 70% of the DataFrame
+        train = detections_df.sample(frac=frac, random_state=42)
+        file_images(train,'train',class_labels)
+        validate = detections_df.drop(train.index)
+        file_images(validate,'val',class_labels)
         detections_df.to_csv(targets[0],index=False)
+        swapped_class_labels = {value: key for key, value in class_labels.items()}
+        dataset = {'path': str(config.geturl('trainpath') / 'yolo'),'train':'train/images','val':'val/images','names':swapped_class_labels}
+        with open(config.geturl('trainpath') / 'yolo' /'dataset.yaml', 'w') as file:
+            yaml.dump(dataset, file, default_flow_style=False)
+
     file_dep =config.geturl('output') / 'train' / 'object_index.csv'
     target = config.geturl('output') / 'train' / 'yolo.csv'
     return {
-        'actions':[CmdAction(process_images_and_save_patches, buffering=1)],
+        'actions':[process_images_and_save_patches],#CmdAction(, buffering=1)
         'file_dep':[file_dep],
         'targets':[target],
         'clean': True,
