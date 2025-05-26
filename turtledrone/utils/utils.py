@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def convert_wgs_to_utm(lon, lat):
     utm_band = str(int((np.floor((lon + 180) / 6 ) % 60) + 1))
     if len(utm_band) == 1:
@@ -9,3 +10,5 @@ def convert_wgs_to_utm(lon, lat):
     else:
         epsg_code = '327' + utm_band
     return epsg_code
+
+

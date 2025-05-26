@@ -100,7 +100,28 @@ def reverse_json(source_path: Path = typer.Argument(..., help="moves json files 
 
     except Exception as e:
         typer.echo(f"An error occurred: {str(e)}")        
+@app.command('clean')
+def clean_images(source_path: Path = typer.Argument(..., help="moves json files into years")):
+    try:
+        # Check if the directory exists
+        if (not source_path.exists()):
+            typer.echo("Directory does not exist.")
+            return
 
+        files = source_path.rglob('*_survey_area_data.csv')
+        for file in files:
+            data = pd.read_csv(file)
+            good_images =data['NewName'].to_list()
+            images = list(file.parent.glob('*.JPG'))
+            for image in images:
+                if not image.name in good_images:
+                    image.unlink()
+                    if image.with_suffix('.json').exists():
+                        image.with_suffix('.json').unlink()
+
+
+    except Exception as e:
+        typer.echo(f"An error occurred: {str(e)}")
 if __name__ == "__main__":
     app()
 

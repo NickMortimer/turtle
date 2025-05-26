@@ -122,35 +122,35 @@ def task_plot_surveys():
         'clean':True,
     }  
     
-def task_plot_each_survey():
-    """
-    Plot each flight to a png file
-    """
-    def process_survey(dependencies, targets,apikey):
-        drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
-        px.set_mapbox_access_token(apikey)
-        max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
-        zoom = 13.5 - np.log(max_bound)
-        fig = px.scatter_mapbox(drone, hover_name='NewName', lat="Latitude", lon="Longitude",  
-                                mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=zoom)        
-        fig.update_layout(mapbox_style="satellite-streets",autosize=False)
-        html_file =list(filter(lambda x: 'html' in x, targets))[0]
-        png_file =list(filter(lambda x: 'png' in x, targets))[0]
-        plotly.offline.plot(fig, filename=html_file,auto_open = False)
-        fig.update_layout(coloraxis_showscale=False,showlegend=False,autosize=False,margin = dict(t=10, l=10, r=10, b=10))
-        fig.write_image(png_file)
+# def task_plot_each_survey():
+#     """
+#     Plot each flight to a png file
+#     """
+#     def process_survey(dependencies, targets,apikey):
+#         drone =pd.read_csv(list(dependencies)[0],index_col='TimeStamp',parse_dates=['TimeStamp'])
+#         px.set_mapbox_access_token(apikey)
+#         max_bound = max(abs(drone.Longitude.max()-drone.Longitude.min()), abs(drone.Latitude.max()-drone.Latitude.min())) * 111
+#         zoom = 13.5 - np.log(max_bound)
+#         fig = px.scatter_mapbox(drone, hover_name='NewName', lat="Latitude", lon="Longitude",  
+#                                 mapbox_style="satellite-streets",color="SurveyId", size_max=30, zoom=zoom)        
+#         fig.update_layout(mapbox_style="satellite-streets",autosize=False)
+#         html_file =list(filter(lambda x: 'html' in x, targets))[0]
+#         png_file =list(filter(lambda x: 'png' in x, targets))[0]
+#         plotly.offline.plot(fig, filename=html_file,auto_open = False)
+#         fig.update_layout(coloraxis_showscale=False,showlegend=False,autosize=False,margin = dict(t=10, l=10, r=10, b=10))
+#         fig.write_image(png_file)
         
         
-    file_dep = list(config.geturl('output').rglob('*_survey_area_data.csv'))
-    for inputfile in file_dep:
-        targets = [config.geturl('reports') / inputfile.name.replace('csv','html'), config.geturl('reports') / inputfile.name.replace('csv','png')]
-        yield {
-            'name':targets[0],
-            'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
-            'file_dep':[inputfile],
-            'targets':targets,
-            'clean':True,
-        }        
+#     file_dep = list(config.geturl('output').rglob('*_survey_area_data.csv'))
+#     for inputfile in file_dep:
+#         targets = [config.geturl('reports') / inputfile.name.replace('csv','html'), config.geturl('reports') / inputfile.name.replace('csv','png')]
+#         yield {
+#             'name':targets[0],
+#             'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
+#             'file_dep':[inputfile],
+#             'targets':targets,
+#             'clean':True,
+#         }        
     
 def task_geopgk_survey():
     """

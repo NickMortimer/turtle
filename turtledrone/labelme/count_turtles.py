@@ -326,7 +326,7 @@ def task_calculate_positions():
         points.to_csv(targets[0],index=False) 
 
     
-    file_dep =  config.geturl('output').rglob('**/*_json.csv')
+    file_dep =  (config.geturl('output') / 'AU').rglob('**/*_json.csv')
     for item in file_dep:
         locations = item.parent / 'location.csv'
         if locations.exists():
@@ -415,7 +415,7 @@ def task_calculate_positions():
 #             stats.to_csv(targets[0])       
 #         file_dep = os.path.join(config.geturl('process'),'mergelabelme.csv')  
 #         target =  os.path.join(config.geturl('process'),'labelme_stats.csv')       
-#         return {
+#       4  return {
 #             'actions':[process_turtlelabel],
 #             'file_dep':[file_dep],
 #             'targets':[target],
@@ -516,7 +516,7 @@ def task_process_turtles():
             drone.to_csv(targets[0],index=True)
         
 
-    file_dep =  config.geturl('output').rglob('**/*json_points.csv')
+    file_dep =  (config.geturl('output') /'AU').rglob('**/*json_points.csv')
     for item in file_dep:
         if os.stat(item).st_size > 100:
             target =item.parent / item.name.replace("points.csv","points_turtleMeanSift.csv")
@@ -555,7 +555,7 @@ def task_process_turtles_totals():
                 outfile.write("Easting,Norting,Longitude,Latitude,SurveyId\n") 
                    
 
-    file_dep =  config.geturl('output').rglob('**/*turtleMeanSift.csv')
+    file_dep =  (config.geturl('output') /'AU').rglob('**/*turtleMeanSift.csv')
     for item in file_dep:
         target =item.parent / item.name.replace("turtleMeanSift.csv","turtleMeanSift_grouped.csv")
         yield {
@@ -570,7 +570,7 @@ def task_merge_turtle_totals():
     def process_merge(dependencies, targets):
         totals = pd.concat([pd.read_csv(file) for file in dependencies])
         totals.to_csv(targets[0],index=False)
-    file_dep =  glob.glob(os.path.join(config.geturl('output'),'**/*turtleMeanSift_grouped.csv'),recursive=True)
+    file_dep =  glob.glob(os.path.join((config.geturl('output') / 'AU'),'**/*turtleMeanSift_grouped.csv'),recursive=True)
     if file_dep:
         target = config.geturl('reports') / 'turtles_totals.csv'
         return {
