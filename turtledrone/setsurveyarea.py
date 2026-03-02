@@ -9,9 +9,9 @@ import numpy as np
 import geopandas as gp
 from geopandas.tools import sjoin
 from shapely.geometry import MultiPoint
-import turtledrone.config as config
 from turtledrone.utils.utils import convert_wgs_to_utm
 from doit import create_after
+from pathlib import Path
 
 
 # def task_make_grids():
@@ -61,9 +61,9 @@ def task_detect_surveys():
             drone.sort_index(inplace=True)
             #remove duplicated time stamps
             drone = drone[~drone.index.duplicated()]
-            drone['SourceDrive'] =drone.SourceFile.str.extract(r'^(.*?DCIM)')
+            drone['SourceDrive'] =drone.SourceFile.apply(lambda x: str(Path(x).parent))
             if timedelta == '0MIN':
-                drone=drone.groupby('SourceDrive').ngroup()
+                drone['Survey']=drone.groupby('SourceDrive').ngroup()
             else:
                 drone['Survey']=drone.index
                 drone['Survey']=drone['Survey'].diff()>pd.Timedelta(timedelta)
@@ -80,9 +80,9 @@ def task_detect_surveys():
             position = drone.groupby('Survey')[['Latitude','Longitude']].mean()
             position =position.join([starttime,endtime,count])
             position.to_csv(targets[0],index=True)
-            
-        file_dep = os.path.join(config.geturl('process'),'imagedata.csv')
-        targets = (os.path.join(config.geturl('process'),'surveysummary.csv'),os.path.join(config.geturl('process'),'surveys.csv'))
+        from turtledrone.config import cfg as config
+        file_dep = os.path.join(config.get_url('process'),'imagedata.csv')
+        targets = (os.path.join(config.get_url('process'),'surveysummary.csv'),os.path.join(config.get_url('process'),'surveys.csv'))
         return {
             'actions':[(process_survey, [],{'timedelta':config.cfg['timedelta'],'maxpitch':config.cfg['maxpitch']})],
             'file_dep':[file_dep],
@@ -121,10 +121,10 @@ def task_assign_area():
             pnts['SurveyId']=countrycode+'_'+pnts['id']+'_'+pnts[['ImageHeight','Survey']].groupby('Survey').transform(lambda x: x.index.min().strftime("%Y%m%dT%H%M"))['ImageHeight']
             pnts.to_csv(targets[0])
             
-
-        file_dep = [os.path.join(config.geturl('process'),'surveys.csv'),
-                    os.path.join(config.geturl('process'),'surveyareas.csv')]
-        target = os.path.join(config.geturl('process'),'surveyswitharea.csv')
+        from turtledrone.config import cfg as config
+        file_dep = [os.path.join(config.get_url('process'),'surveys.csv'),
+                    os.path.join(config.get_url('process'),'surveyareas.csv')]
+        target = os.path.join(config.get_url('process'),'surveyswitharea.csv')
         return {
             'actions':[(process_assign_area,[],{'countrycode':config.cfg["country"]})],
             'file_dep':file_dep,

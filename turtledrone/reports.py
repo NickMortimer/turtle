@@ -16,7 +16,7 @@ import shapely.wkt
 from shapely.geometry import MultiPolygon
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
-import turtledrone.config as config
+
 import shutil
 
 
@@ -25,8 +25,6 @@ import shutil
 #     cfg = yaml.load(ymlfile, yaml.SafeLoader)
 # basepath = os.path.dirname(config['config'])
 
-def task_set_up():
-    config.read_config()
          
    
 def task_check_survey(): 
@@ -50,7 +48,8 @@ def task_check_survey():
                         'Area':d.SurveyAreaHec.mean(),
                         'Missing':missing,
                         'JsonCount':json}]).to_csv(targets[0],index=False)
-    file_dep =  list(config.geturl('output').rglob('*_survey_area_data.csv'))
+    from turtledrone.config import cfg as config
+    file_dep =  list(config.get_url('output').rglob('*_survey_area_data.csv'))
     for file in file_dep:
         target = file.parent / file.name.replace('_survey_area_data.csv','_survey_area_data_summary.csv')
         yield {
@@ -79,9 +78,9 @@ def task_concat_check_survey():
         surveys =pd.concat([pd.read_csv(file) for file in dependencies])
         surveys =surveys.set_index('SurveyId').sort_index()
         surveys.to_csv(targets[0])
-        
-    file_dep = list(config.geturl('output').rglob('*_survey_area_data_summary.csv'))
-    target = config.geturl('reports') /'image_coverage.csv'
+    from turtledrone.config import cfg as config    
+    file_dep = list(config.get_url('output').rglob('*_survey_area_data_summary.csv'))
+    target = config.get_url('reports') /'image_coverage.csv'
     return {
         'actions':[process_concat_check_survey],
         'file_dep':file_dep,
@@ -110,9 +109,10 @@ def task_plot_surveys():
         png_file =list(filter(lambda x: 'png' in x, targets))[0]
         plotly.offline.plot(fig, filename=html_file,auto_open = False)
         fig.write_image(png_file)
-    file_dep = list(config.geturl('output').rglob('*_survey_area_data.csv'))
-    targets = [os.path.join(config.geturl('reports'),'surveys.html'),
-               os.path.join(config.geturl('reports'),'surveys.png')]
+    from turtledrone.config import cfg as config        
+    file_dep = list(config.get_url('output').rglob('*_survey_area_data.csv'))
+    targets = [os.path.join(config.get_url('reports'),'surveys.html'),
+               os.path.join(config.get_url('reports'),'surveys.png')]
                
     return {
 
@@ -168,11 +168,11 @@ def task_geopgk_survey():
             gdf.loc[(gdf.GimbalPitchDegree*-1)>80].to_file(targets[0], driver="GeoJSON")                
 #            gdf.to_file(targets[0], driver="GPKG", layer=survey)
 
-        
-    file_dep = glob.glob(os.path.join(config.geturl('output'),config.cfg['country'],'**','*_survey_area_data.csv'),recursive=True)
+    from turtledrone.config import cfg as config   
+    file_dep = glob.glob(os.path.join(config.get_url('output'),config.cfg['country'],'**','*_survey_area_data.csv'),recursive=True)
     for file in file_dep:
         target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
-        target = os.path.join(config.geturl('reports'),target)
+        target = os.path.join(config.get_url('reports'),target)
         #countries_gdf
         yield {
             'name':file,
@@ -206,11 +206,11 @@ def task_html_report():
 
 
         
-
-    file_dep = glob.glob(os.path.join(config.cfg['output'],config.cfg['country'],'**','*_survey_area_data_summary.csv'),recursive=True)
+    from turtledrone.config import cfg as config
+    file_dep = glob.glob(os.path.join(config.get_url('output'),config.cfg['country'],'**','*_survey_area_data_summary.csv'),recursive=True)
     for file in file_dep:
         target = os.path.splitext(os.path.basename(file))[0]+'_report.html'
-        target = os.path.join(config.cfg['reports'],target)
+        target = os.path.join(config.get_url('reports'),target)
         #countries_gdf
         yield {
             'name':file,

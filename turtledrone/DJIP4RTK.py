@@ -13,7 +13,6 @@ from drone import P4rtk
 from read_rtk import read_mrk
 from pyproj import Proj 
 from turtledrone.utils.utils import convert_wgs_to_utm
-import config as config
 from pathlib import Path
 import cameratransform as ct
 import re
@@ -22,18 +21,14 @@ from shapely.geometry import Polygon
 
 
 
-def task_set_up():
-    config.read_config()
-
  
 def task_process_mergpos():
         def process_json(dependencies, targets):
             # dependencies.sort()
-            source_file = list(filter(lambda x: 'exif.csv' in x, dependencies))[0]
+            source_file = next(f for f in dependencies if 'exif.csv' in str(f))
             drone =pd.read_csv(source_file,index_col='Sequence',parse_dates=['TimeStamp']).sort_values('TimeStamp')
-            mrk_file =list(filter(lambda x: '_Timestamp.MRK' in x, dependencies))
-            if mrk_file:
-                mrk =read_mrk(mrk_file[0])
+            mrk_file = next((f for f in dependencies if '_Timestamp.MRK' in str(f)), None)
+            rtk_file = next((f for f in dependencies if '_Timestamp.CSV' in str(f)), None)
             utmcode =convert_wgs_to_utm(drone['Longitude'].mean(),drone['Latitude'].mean())
             utmproj =Proj(f'epsg:{utmcode:1.5}')            
             drone['EastingXif'],drone['NorthingXif'] =utmproj(drone['Longitude'].values,drone['Latitude'].values)
@@ -47,11 +42,22 @@ def task_process_mergpos():
             drone.loc[drone['Interval']>8,'Leg'] =1
             drone['Leg'] = drone['Leg'].cumsum()
             drone['UtmCode'] =utmcode
+            if rtk_file:
+                rtk =pd.read_csv(rtk_file,parse_dates=['GPST'],index_col=['Sequence'])
+                rtk['Easting'],rtk['Northing'] =utmproj(rtk['longitude(deg)'].values,rtk['latitude(deg)'].values)
+                #ok lets replace the column names ( with _ characters
+                rtk.columns = rtk.columns.str.replace(r'[(]', '_', regex=True)
+                rtk.columns = rtk.columns.str.replace(r'[)]', '', regex=True)
+                rtk =rtk.add_suffix('_rtk')
+                drone =drone.join(rtk,rsuffix='_rtk')            
             if mrk_file:
+                mrk =read_mrk(mrk_file)
                 mrk['Easting'],mrk['Northing'] =utmproj(mrk['Longitude'].values,mrk['Latitude'].values)
                 mrk['EllipsoideHight'] = pd.to_numeric(mrk.EllipsoideHight.str.split(',',expand=True)[0])
+                mrk[['errX','errY','errZ']]=mrk.Error.str.split(',',expand=True).astype(float)
                 mrk =mrk.add_suffix('Mrk')
-                drone =drone.join(mrk[['UTCTimeMrk','EllipsoideHightMrk','LatitudeMrk','LongitudeMrk','EastingMrk','NorthingMrk']],rsuffix='Mrk')
+
+                drone =drone.join(mrk[['UTCTimeMrk','EllipsoideHightMrk','LatitudeMrk','LongitudeMrk','EastingMrk','NorthingMrk','errXMrk','errYMrk','errZMrk']],rsuffix='Mrk')
                 drone['ImageEasting']= drone['EastingMrk']
                 drone['ImageNorthing'] = drone['NorthingMrk']
             else:
@@ -78,15 +84,14 @@ def task_process_mergpos():
             # drone.sort_index(inplace=True)
             # drone = drone[pd.notna(drone.index)]
             drone.to_csv(targets[0],index=True)
-            
-        directories_with_survey = [p for p in config.geturl('imagesource').rglob('*SURVEY*') if p.is_dir()]
-        for item in directories_with_survey:
-            source = list(item.glob('**/exif.csv'))
-            for exiffile in source:
-                file_dep = list(exiffile.parent.glob('*.MRK'))
+        from turtledrone.config import cfg as config
+        for item in config.get_imagesource_dirs():
+            exiffile = item / 'exif.csv'
+            if exiffile.exists():
+                file_dep = list(item.glob('*.MRK')) + list(item.glob('*Timestamp.CSV'))
                 file_dep.append(exiffile)
                 file_dep = list(filter(lambda x:x.stat().st_size > 0,file_dep))
-                target =   exiffile.parent / 'position.csv'   
+                target =   item / 'position.csv'   
                 if list(filter(lambda x: 'exif.csv' in x.name,file_dep)):        
                     yield {
                         'name':target,
@@ -94,7 +99,8 @@ def task_process_mergpos():
                         'file_dep':file_dep,
                         'targets':[target],
                         'clean':True,
-                    }    
+                    }
+  
 @create_after(executed='process_mergpos', target_regex='*\position.json')    
 def task_addpolygons():
     def process_polygons(dependencies, targets):
@@ -117,11 +123,11 @@ def task_addpolygons():
                                                                                                     elevation_m=item.RelativeAltitude,
                                                                                                     roll_deg=item.GimbalRollDegree,
                                                                                                    heading_deg=item.GimbalYawDegree))
-            perside=10 
+            perside=20 
             x = np.linspace(0, item.ImageWidth, num=perside)  
             y = np.linspace(0, item.ImageHeight, num=perside)
-            bottom = np.dstack((x,np.ones(perside)*item.ImageHeight-1))[0]
-            right = np.dstack((np.ones(perside)*item.ImageWidth-1,y[::-1]))[0]
+            bottom = np.dstack((x,np.ones(perside)*item.ImageHeight))[0]
+            right = np.dstack((np.ones(perside)*item.ImageWidth,y[::-1]))[0]
             top = np.dstack((x[::-1],np.zeros(perside)))[0]
             left = np.dstack((np.zeros(perside),y))[0]
             points = np.vstack((bottom,right,top,left))
@@ -141,15 +147,22 @@ def task_addpolygons():
 
     # dewarp = pd.to_numeric(config.cfg['dewarp'] )
     # cal = pd.to_numeric(config.cfg['calibration'] )
-    for file_dep in config.geturl('imagesource').rglob('position.csv'):
-        target = file_dep.parent /'polygons.csv'
-        yield {
-            'name':file_dep,
-            'actions':[process_polygons],
-            'file_dep':[file_dep],
-            'targets':[target],
-            'clean':True,
-        }       
+    from turtledrone.config import cfg as config
+
+    for item in config.get_imagesource_dirs():
+        positionfile = item / 'position.csv'
+        if positionfile.exists():
+            file_dep  =  positionfile
+            target =   item /'polygons.csv'           
+            yield {
+                'name':file_dep,
+                'actions':[process_polygons],
+                'file_dep':[file_dep],
+                'targets':[target],
+                'clean':True,
+            }  
+
+     
 @create_after(executed='addpolygons', target_regex='*\position.json')       
 def task_merge_xif():
         def process_xif(dependencies, targets):
@@ -163,18 +176,22 @@ def task_merge_xif():
             #     rtkmask =drone.RtkFlag==1
             #     drone = drone[~drone.LatitudeMrk.isna()]
             drone.to_csv(list(targets)[0],index=True)
-            
-        file_dep = list(config.geturl('imagesource').rglob('polygons.csv'))
-        if file_dep:
-            processpath =config.geturl('process')
-            os.makedirs(processpath,exist_ok=True)
+        from turtledrone.config import cfg as config    
+        polygons = [item / 'polygons.csv'
+                    for item in config.get_imagesource_dirs()
+                    if (item / 'polygons.csv').exists()]
+
+        if polygons:
+            processpath = config.get_url('process')
+            os.makedirs(processpath, exist_ok=True)
             target = processpath / 'imagedata.csv'
             return {
-                'actions':[process_xif],
-                'file_dep':file_dep,
-                'targets':[target],
-                'clean':True,
+                'actions': [process_xif],
+                'file_dep': polygons,       # list of polygons.csv
+                'targets': [target],
+                'clean': True,
             }
+
 def run():
     import sys
     from doit.cmd_base import ModuleTaskLoader, get_loader

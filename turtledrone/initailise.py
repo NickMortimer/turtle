@@ -9,12 +9,10 @@ import numpy as np
 import geopandas as gp
 from shapely.geometry import MultiPoint
 from turtledrone.utils.utils import convert_wgs_to_utm
-import turtledrone.config as config
 from doit import create_after
 import typer
 
-def task_set_up():
-    config.read_config()
+
 
 
 def task_make_area_list():
@@ -39,9 +37,9 @@ def task_make_area_list():
         areas = pd.DataFrame.from_records([split(shape) for shape in dependencies])
         os.makedirs(os.path.dirname(targets[0]),exist_ok=True)
         areas.to_csv(targets[0],index=False)                
-        
-    file_dep =list(config.geturl('surveyarea').resolve().rglob('*.shp'))
-    target = config.geturl('process') / 'surveyareas.csv'
+    from turtledrone.config import cfg
+    file_dep =list(cfg.get_url('surveyarea').resolve().rglob('*.shp'))
+    target = cfg.get_url('process') / 'surveyareas.csv'
     if file_dep:
         return {
             'actions':[process_area_list],

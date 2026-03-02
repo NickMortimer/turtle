@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "symsorter"
+version = "0.1.0"
+description = "A CLIP-based image classification and similarity tool for intelligent image sorting"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Nick Mortimer", email = "nick.mortimer@csiro.au"}
+]
+maintainers = [
+    {name = "Nick Mortimer", email = "nick.mortimer@csiro.au"}
+]
+keywords = ["computer-vision", "image-classification", "clip", "similarity", "sorting", "gui"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "PySide6>=6.5.0",
+    "numpy>=1.21.0",
+    "Pillow>=9.0.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "ftfy>=6.1.0",
+    "regex>=2022.7.9",
+    "tqdm>=4.64.0",
+    "typer>=0.9.0",
+]
+
+[project.optional-dependencies]
+gui = [
+    "PySide6>=6.5.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=22.0.0",
+    "isort>=5.10.0",
+    "flake8>=5.0.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/NickMortimer/symsorter"
+Repository = "https://github.com/NickMortimer/symsorter"
+Documentation = "https://github.com/NickMortimer/symsorter#readme"
+"Bug Reports" = "https://github.com/NickMortimer/symsorter/issues"
+
+[project.scripts]
+symsorter = "symsorter.cli:main"
+symsorter-gui = "symsorter.gui:main"
+symsorter-encode = "symsorter.cli:encode_command"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["symsorter*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
