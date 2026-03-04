@@ -12,6 +12,10 @@ import numpy as np
 from PIL import Image
 import concurrent.futures
 
+from turtledrone.labelme.detect_and_crop_transformer import (
+    detect as detect_transformer,
+)
+
 
 
 app = typer.Typer()
@@ -308,6 +312,9 @@ def check_cuda():
             print("CUDA is NOT available.")
     except ImportError:
         print("PyTorch is not installed.")
+
+
+app.command('detect-transformer')(detect_transformer)
 
 
 

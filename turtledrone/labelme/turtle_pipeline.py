@@ -126,7 +126,13 @@ def process_turtle_clusters(
 
     tcounts = pd.DataFrame(
         filtered.groupby("groups").apply(
-            lambda grp: _count_turtles_in_group(grp, plotpath, bandwidth)
+            lambda grp: _count_turtles_in_group(
+                grp,
+                plotpath,
+                bandwidth,
+                int(grp.name),
+            ),
+            include_groups=False,
         ),
         columns=["turtle_count"],
     )
@@ -145,6 +151,7 @@ def _count_turtles_in_group(
     grp: pd.DataFrame,
     plotpath: str | Path,
     bandwidth: float,
+    group_id: int,
 ) -> dict:
     """Cluster a temporal group and return cluster count and centers."""
     clustering = MeanShift(bandwidth=bandwidth).fit(
@@ -170,7 +177,7 @@ def _count_turtles_in_group(
         c="red",
         s=50,
     )
-    plt.savefig(Path(plotpath) / f"group_plot_{grp.groups.min()}")
+    plt.savefig(Path(plotpath) / f"group_plot_{group_id}")
     plt.close()
     return {
         "count": len(clustering.cluster_centers_),
@@ -210,7 +217,10 @@ def calculate_turtle_totals(drone: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(
             columns=["Easting", "Norting", "Longitude", "Latitude", "SurveyId"]
         )
-    return filtered.groupby("groups").apply(process_survey_group)
+    return filtered.groupby("groups").apply(
+        process_survey_group,
+        include_groups=False,
+    )
 
 
 def merge_csv_files(file_paths: list[str] | list[Path]) -> pd.DataFrame:

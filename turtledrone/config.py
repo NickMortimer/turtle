@@ -21,21 +21,23 @@ logger = logging.getLogger(__name__)
 class Config:
     """Manages survey processing configuration."""
 
-    def __init__(self, path: Optional[str | Path] = None):
+    def __init__(self, path: Optional[str | Path] = None, prompt_if_none: bool = False):
         """
         Initialize configuration.
 
         Parameters
         ----------
         path : str | Path, optional
-            Path to YAML configuration file. If None, user will be prompted.
+            Path to YAML configuration file.
+        prompt_if_none : bool, optional
+            If True and path is None, prompt user for config file. Default False.
         """
         self.cfg: dict = {}
         self.catalog_dir: Optional[Path] = None
 
         if path:
             self.load(path)
-        else:
+        elif prompt_if_none:
             path = self._prompt_config_file()
             if path:
                 self.load(path)
@@ -221,7 +223,40 @@ def init(path: Optional[str | Path] = None) -> Config:
     Parameters
     ----------
     path : str | Path, optional
-        Path to config file. If not provided, will prompt user or use cached instance.
+        Path to config file. If None and no instance exists, raises error.
+
+    Returns
+    -------
+    Config
+        Configuration instance.
+        
+    Raises
+    ------
+    RuntimeError
+        If no config instance exists and no path provided.
+    """
+    global _instance
+    if _instance is None:
+        if path is None:
+            raise RuntimeError(
+                "Config not initialized. Call config.read_config(path) before accessing config values."
+            )
+        _instance = Config(path)
+    return _instance
+
+
+def read_config(path: Optional[str | Path] = None, prompt_if_none: bool = True) -> Config:
+    """
+    Read and initialize global configuration.
+
+    Parameters
+    ----------
+    path : str | Path, optional
+        Path to config file. If None, will prompt user (if prompt_if_none=True)
+        or return existing instance.
+    prompt_if_none : bool, optional
+        If True and path is None and no instance exists, prompt user for file.
+        Default True for backward compatibility with interactive usage.
 
     Returns
     -------
@@ -229,26 +264,18 @@ def init(path: Optional[str | Path] = None) -> Config:
         Configuration instance.
     """
     global _instance
-    if _instance is None:
+    if path is not None:
+        # Explicit path provided - create/reinitialize
         _instance = Config(path)
+    elif _instance is None:
+        # No path and no instance - prompt if allowed
+        if prompt_if_none:
+            _instance = Config(path=None, prompt_if_none=True)
+        else:
+            raise RuntimeError(
+                "Config not initialized. Call config.read_config(path) with a valid path."
+            )
     return _instance
-
-
-def read_config(path: Optional[str | Path] = None) -> Config:
-    """
-    Read and initialize global configuration.
-
-    Parameters
-    ----------
-    path : str | Path, optional
-        Path to config file.
-
-    Returns
-    -------
-    Config
-        Configuration instance.
-    """
-    return init(path)
 
 
 def geturl(key: str) -> Path:
@@ -289,15 +316,23 @@ def get(key: str, default: Any = None) -> Any:
 
 # Module-level attribute access for backward compatibility with config.cfg
 class _ConfigProxy:
-    """Proxy object to allow config.cfg.['key'] syntax."""
+    """Proxy object to allow config.cfg.['key'] syntax and method delegation."""
 
     def __getitem__(self, key: str) -> Any:
         """Get item from config."""
         return init().cfg[key]
 
     def __getattr__(self, key: str) -> Any:
-        """Get attribute from config."""
-        return init().cfg.get(key)
+        """Get attribute from config dict or delegate to Config methods."""
+        # First try to get from the Config instance (for methods like get_url)
+        instance = init()
+        if hasattr(instance, key):
+            attr = getattr(instance, key)
+            # If it's a method, return it directly so it can be called
+            if callable(attr):
+                return attr
+        # Otherwise get from the cfg dictionary
+        return instance.cfg.get(key)
 
     def __repr__(self) -> str:
         """Return string representation."""

@@ -5,8 +5,10 @@ import typer
 from typer import Typer
 import sys
 from pathlib import Path
+from typing import Optional
 from cookiecutter.main import cookiecutter
 import os
+import shutil
 import yaml
 import turtledrone as td
 
@@ -185,20 +187,142 @@ def process(config : str= typer.Argument(None, help="path to config file")):
                 reports.run()
 
 
-    #init.run()
-
-
-# @tdrone.command('clean')
-# def process(
-#     task : typer.Argument(..., help="task to be processed"),
-#     config : typer.Argument(..., help="path to config file")):
-#     """
+@tdrone.command('reports')
+def reports_command(
+    config: Optional[str] = typer.Argument(
+        None,
+        help="Path to config file (or config=/path/to/config.yaml)",
+    ),
+    config_path: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to YAML configuration file",
+    ),
+):
+    """
+    Generate survey reports (image coverage, plots, geopackages).
     
-#     """
-#     pass
+    This command runs the reports pipeline tasks including:
+    - Survey coverage summaries
+    - Image coverage statistics
+    - Survey plots and maps
+    - Geopackage exports for QGIS
+    """
+    import doit
+    import turtledrone.config as config_module
+    
+    resolved_config: Optional[Path] = config_path
+    if resolved_config is None and config is not None:
+        if config.startswith("config="):
+            resolved_config = Path(config.split("=", 1)[1])
+        else:
+            resolved_config = Path(config)
+
+    if resolved_config is None:
+        typer.echo("Error: --config option is required", err=True)
+        raise typer.Exit(code=1)
+
+    if not resolved_config.exists():
+        typer.echo(f"Error: Config file not found: {resolved_config}", err=True)
+        raise typer.Exit(code=1)
+    
+    typer.echo(f"Loading configuration from: {resolved_config}")
+    config_module.read_config(resolved_config, prompt_if_none=False)
+    typer.echo("Configuration loaded successfully")
+    
+    # Change working directory to config file's parent directory
+    config_dir = resolved_config.parent.resolve()
+    os.chdir(config_dir)
+    typer.echo(f"Working directory: {config_dir}")
+    
+    # Set up per-config doit database file
+    db_file = config_dir / ".doit_reports.db"
+    typer.echo(f"Using task database: {db_file}")
+    
+    # Import reports module and run
+    try:
+        from turtledrone import reports
+    except ImportError as e:
+        missing_module = str(e).split("'")[1] if "'" in str(e) else "unknown"
+        typer.echo(f"Error: Missing required module '{missing_module}' for reports generation.", err=True)
+        typer.echo(f"Install reports dependencies with: pip install -e .[reports]", err=True)
+        typer.echo(f"Or with poetry: poetry install --extras reports", err=True)
+        raise typer.Exit(code=1)
+    
+    # Configure doit
+    reports.DOIT_CONFIG.update({
+        'check_file_uptodate': 'timestamp',
+        'num_processes': 10,
+        'verbosity': 2,
+        'db_file': str(db_file),
+    })
+    
+    # Clear sys.argv so doit runs all tasks
+    sys.argv = [sys.argv[0]]
+    
+    typer.echo("Starting reports generation...")
+    doit.run(reports.__dict__)
+    typer.echo("✓ Reports generation completed")
 
 
-# @goprobruv.command('import')
+@tdrone.command('clean')
+def clean(
+    config: str = typer.Argument(None, help="Path to config file"),
+):
+    """
+    Clean generated outputs from drone processing.
+    
+    This removes cached files, temporary outputs, and task databases
+    from previous processing runs.
+    """
+    import shutil
+    import glob
+    
+    if config is None:
+        config_file = Path().cwd() / 'fieldtrip.yml'
+        if config_file.exists():
+            cfg = read_config(config_file)
+            drone_configs = Path(cfg['drone_path'].format(CATALOG_DIR=Path().cwd())).rglob('*_config.yml')
+            for drone_config in drone_configs:
+                typer.echo(f"Cleaning {drone_config.parent}...")
+                _clean_drone_dir(drone_config.parent)
+    else:
+        config_path = Path(config)
+        if config_path.exists():
+            _clean_drone_dir(config_path.parent)
+        else:
+            typer.echo(f"Config file not found: {config}", err=True)
+            raise typer.Exit(code=1)
+    
+    typer.echo("✓ Cleanup completed")
+
+
+def _clean_drone_dir(drone_dir: Path) -> None:
+    """Remove generated files from a drone directory."""
+    # Remove __pycache__ directories
+    for pycache in drone_dir.rglob("__pycache__"):
+        shutil.rmtree(pycache, ignore_errors=True)
+    
+    # Remove .pyc files
+    for pyc_file in drone_dir.rglob("*.pyc"):
+        pyc_file.unlink(missing_ok=True)
+    
+    # Remove doit database if present
+    doit_db = drone_dir / ".doit.db"
+    if doit_db.exists():
+        doit_db.unlink()
+    
+    # Remove temporary processing files (based on naming patterns)
+    for pattern in ["*.tmp", "*.bak", ".cache"]:
+        for file in drone_dir.glob(pattern):
+            if file.is_file():
+                file.unlink(missing_ok=True)
+            elif file.is_dir():
+                shutil.rmtree(file, ignore_errors=True)
+
+
+
 # def import_command(
 #         collection_path: str = typer.Argument(..., help="Root path to MarImBA collection."),
 #         instrument_id: str = typer.Argument(None, help="MarImBA instrument ID."),

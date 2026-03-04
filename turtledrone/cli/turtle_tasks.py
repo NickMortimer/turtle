@@ -1,44 +1,25 @@
-"""doit tasks for LabelMe turtle processing and reporting."""
+"""Doit task definitions for turtle analysis pipeline."""
 
 import glob
 import json
 import os
-import sys
 from pathlib import Path
-from typing import Optional
 
-import doit
 import pandas as pd
-import typer
 from doit import create_after
 
 import turtledrone.config as config
-from turtledrone.labelme.turtle_pipeline import (
-    build_turtles_report,
-    calculate_positions,
-    calculate_turtle_totals,
-    from_np_array,
-    load_and_prepare_points,
-    merge_csv_files,
-    process_turtle_clusters,
-)
 
-# Module-level variable to store CLI output_dir override
-_output_dir_override: Optional[Path] = None
 
-# Module-level variable to store per-country doit config
-_doit_config: dict = {}
-
-# doit configuration dictionary (will be populated by run_counting)
+# doit configuration dictionary (will be populated when run as __main__)
 DOIT_CONFIG = {}
 
 
-def task_set_up():
-    """Load repository configuration for subsequent tasks."""
-    config.read_config()
-    # Apply output_dir override if provided via CLI
-    if _output_dir_override:
-        config.init().set("output", str(_output_dir_override))
+def _pipeline():
+    """Lazy-load turtle pipeline functions to keep CLI import lightweight."""
+    from turtledrone.labelme import turtle_pipeline
+
+    return turtle_pipeline
 
 
 def task_process_labelme():
@@ -46,11 +27,18 @@ def task_process_labelme():
 
     def loadshapes(file_path):
         print(file_path)
-        with open(file_path, "r") as read_file:
-            data = json.load(read_file)
-        output = pd.DataFrame(data["shapes"])
-        output["FilePath"] = file_path
-        return output
+        try:
+            with open(file_path, "r") as read_file:
+                data = json.load(read_file)
+            output = pd.DataFrame(data["shapes"])
+            output["FilePath"] = file_path
+            return output
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON in {file_path}: {e}")
+            raise
+        except Exception as e:
+            print(f"Error reading {file_path}: {e}")
+            raise
 
     def process_labelme(dependencies, targets):
         jsonfiles = glob.glob(os.path.join(os.path.dirname(targets[0]), "*.json"))
@@ -60,8 +48,15 @@ def task_process_labelme():
             data = pd.DataFrame()
         data.to_csv(targets[0], index=False)
 
+    # Get flights path - will fail if config not loaded, which is OK for error messaging
+    try:
+        flights_path = config.geturl("flights")
+    except (RuntimeError, KeyError) as e:
+        print(f"Error: Could not get flights path from config: {e}")
+        raise
+    
     for item in glob.glob(
-        os.path.join(config.geturl("flights"), "**/"),
+        os.path.join(flights_path, "**/"),
         recursive=True,
     ):
         file_dep = glob.glob(os.path.join(os.path.dirname(item), "*.json"))
@@ -86,8 +81,9 @@ def task_calculate_positions():
     def process_positions(dependencies, targets):
         location_file = list(filter(lambda x: "location" in x, dependencies))[0]
         json_file = list(filter(lambda x: "_json" in x, dependencies))[0]
-        points = load_and_prepare_points(location_file, json_file)
-        points = calculate_positions(points)
+        pipeline = _pipeline()
+        points = pipeline.load_and_prepare_points(location_file, json_file)
+        points = pipeline.calculate_positions(points)
         points.to_csv(targets[0], index=False)
 
     file_dep = (config.geturl("flights")).rglob("**/*_json.csv")
@@ -111,7 +107,8 @@ def task_process_turtles():
     def process_turtles(dependencies, targets):
         plotpath = os.path.dirname(targets[0])
         drone = pd.read_csv(dependencies[0], parse_dates=["TimeStamp"])
-        output = process_turtle_clusters(drone, plotpath)
+        pipeline = _pipeline()
+        output = pipeline.process_turtle_clusters(drone, plotpath)
         output.to_csv(targets[0], index=True)
 
     file_dep = (config.geturl("flights")).rglob("**/*json_points.csv")
@@ -135,12 +132,13 @@ def task_process_turtles_totals():
     """Reduce clustered detections to per-group turtle total coordinates."""
 
     def process_turtles_totals(dependencies, targets):
+        pipeline = _pipeline()
         drone = pd.read_csv(
             dependencies[0],
             parse_dates=["TimeStamp"],
-            converters={"turtle_count_y": from_np_array},
+            converters={"turtle_count_y": pipeline.from_np_array},
         )
-        turtles = calculate_turtle_totals(drone)
+        turtles = pipeline.calculate_turtle_totals(drone)
         turtles.to_csv(targets[0], index=False)
 
     file_dep = (config.geturl("flights")).rglob("**/*turtleMeanSift.csv")
@@ -163,7 +161,8 @@ def task_merge_turtle_totals():
     """Merge all grouped turtle total files into one reports CSV."""
 
     def process_merge(dependencies, targets):
-        totals = merge_csv_files(dependencies)
+        pipeline = _pipeline()
+        totals = pipeline.merge_csv_files(dependencies)
         totals.to_csv(targets[0], index=False)
 
     file_dep = glob.glob(
@@ -183,21 +182,35 @@ def task_merge_turtle_totals():
         }
 
 
-def task_turtles_report():
-    """Build final per-survey turtle density report."""
+def task_check_survey():
+    """Reuse reports task_check_survey in turtle pipeline task set."""
+    from turtledrone.reports import task_check_survey as reports_task
 
-    def process_survey(_, targets):
-        images = pd.read_csv(
-            config.geturl("reports") / "image_coverage.csv",
-            index_col="SurveyId",
-        )
-        turtle_file = pd.read_csv(config.geturl("reports") / "turtles_totals.csv")
-        output = build_turtles_report(images, turtle_file)
+    return reports_task()
+
+
+def task_turtles_report():
+    """Build final per-survey turtle density report.
+    
+    Requires image_coverage.csv from reports pipeline (task_concat_check_survey).
+    Run reports.py tasks first to generate survey coverage data.
+    """
+
+    def process_survey(dependencies, targets):
+        pipeline = _pipeline()
+        
+        # Load required files - will fail if either is missing
+        image_coverage_file = list(filter(lambda x: "image_coverage" in str(x), dependencies))[0]
+        turtles_file = list(filter(lambda x: "turtles_totals" in str(x), dependencies))[0]
+        
+        images = pd.read_csv(image_coverage_file, index_col="SurveyId")
+        turtle_file = pd.read_csv(turtles_file)
+        output = pipeline.build_turtles_report(images, turtle_file)
         output.to_csv(targets[0], index=True)
 
     file_dep = [
-        config.geturl("reports") / "image_coverage.csv",
         config.geturl("reports") / "turtles_totals.csv",
+        config.geturl("reports")/ "image_coverage.csv",
     ]
     os.makedirs(config.geturl("reports"), exist_ok=True)
     targets = os.path.join(config.geturl("reports"), "turtles_per_survey.csv")
@@ -208,61 +221,50 @@ def task_turtles_report():
         "clean": True,
     }
 
-
-def run_counting(
-    config_file: Path = typer.Option(
-        ...,
-        help="Path to configuration YAML file",
-    ),
-    output_dir: Optional[Path] = typer.Option(
-        None,
-        help="Override output directory from config file",
-    ),
-) -> None:
-    """Run turtle counting pipeline with optional output directory override.
-
-    Parameters
-    ----------
-    config_file : Path
-        Path to configuration YAML file.
-    output_dir : Path, optional
-        If provided, overrides the output directory specified in the config file.
-    """
-    global _output_dir_override
-
-    if output_dir:
-        _output_dir_override = output_dir.resolve()
-        print(f"Using output directory: {_output_dir_override}")
-
-    # Load config from specified file
-    config.read_config(config_file)
-
-    # Apply override if provided
-    if _output_dir_override:
-        config.init().set("output", str(_output_dir_override))
-
-    # Set up per-country doit database file
-    config_dir = Path(config_file).parent
-    db_file = config_dir / ".doit.db"
+if __name__ == '__main__':
+    import sys
+    import doit
     
-    # Store config in module-level variable so DOIT_CONFIG can access it
-    globals()["_doit_config"] = {
-        "default_tasks": [],
+    # Parse config file from command line arguments
+    config_file = None
+    for arg in sys.argv[1:]:
+        if arg.startswith('config='):
+            config_file = arg.split('=', 1)[1]
+        elif arg.startswith('--config='):
+            config_file = arg.split('=', 1)[1]
+        elif arg == '--config' or arg == '-c':
+            # Next argument should be the config file
+            idx = sys.argv.index(arg)
+            if idx + 1 < len(sys.argv):
+                config_file = sys.argv[idx + 1]
+    
+    if not config_file:
+        print("Error: Config file required. Use: config=/path/to/config.yaml or --config /path/to/config.yaml")
+        sys.exit(1)
+    
+    # Load the config before running tasks
+    print(f"Loading configuration from: {config_file}")
+    config.read_config(Path(config_file), prompt_if_none=False)
+    print(f"Configuration loaded successfully")
+    
+    # Change working directory to config file's parent directory
+    config_dir = Path(config_file).parent.resolve()
+    os.chdir(config_dir)
+    print(f"Working directory: {config_dir}")
+    
+    # Set up per-config doit database file in the config directory
+    db_file = config_dir / ".doit.db"
+    print(f"Using task database: {db_file}")
+    
+    # Configure doit
+    DOIT_CONFIG.update({
+        "num_processes": 10,
         "verbosity": 2,
         "db_file": str(db_file),
-    }
+    })
     
-    # Update the DOIT_CONFIG dictionary
-    globals()["DOIT_CONFIG"] = globals()["_doit_config"]
-    
-    # Clear sys.argv so doit only sees the script name
+    # Clear command line args so doit runs all tasks
     sys.argv = [sys.argv[0]]
     
-    # Run doit tasks
+    # Run doit with the task definitions (will run all tasks when no args provided)
     doit.run(globals())
-
-
-if __name__ == "__main__":
-    app = typer.Typer()
-    app.command()(run_counting)
-    app()

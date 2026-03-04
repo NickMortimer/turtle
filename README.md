@@ -158,3 +158,21 @@ pip install git+https://github.com/openai/CLIP.git
 ```
 
 ## Installation
+
+Install base package:
+
+```bash
+poetry install
+```
+
+Install optional AI tooling (PyTorch + torchvision + Ultralytics):
+
+```bash
+poetry install --extras ai
+```
+
+Or with pip from an editable checkout:
+
+```bash
+pip install -e ".[ai]"
+```

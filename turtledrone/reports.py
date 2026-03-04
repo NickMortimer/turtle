@@ -1,14 +1,10 @@
 import os
 import glob
 import doit
-import glob
-import os
 import numpy as np
 import yaml
 import pandas as pd
-from doit import get_var
 from doit import create_after
-import numpy as np
 import plotly
 import plotly.express as px
 import geopandas as gp
@@ -20,10 +16,8 @@ from pathlib import Path
 import shutil
 
 
-# config = {"config": get_var('config', 'NO')}
-# with open(config['config'], 'r') as ymlfile:
-#     cfg = yaml.load(ymlfile, yaml.SafeLoader)
-# basepath = os.path.dirname(config['config'])
+# doit configuration dictionary (will be populated when run as __main__)
+DOIT_CONFIG = {}
 
          
    
@@ -49,7 +43,11 @@ def task_check_survey():
                         'Missing':missing,
                         'JsonCount':json}]).to_csv(targets[0],index=False)
     from turtledrone.config import cfg as config
-    file_dep =  list(config.get_url('output').rglob('*_survey_area_data.csv'))
+    file_dep = list(
+        (config.get_url('flights') / config.get('country')).rglob(
+            '*_survey_area_data.csv'
+        )
+    )
     for file in file_dep:
         target = file.parent / file.name.replace('_survey_area_data.csv','_survey_area_data_summary.csv')
         yield {
@@ -79,8 +77,8 @@ def task_concat_check_survey():
         surveys =surveys.set_index('SurveyId').sort_index()
         surveys.to_csv(targets[0])
     from turtledrone.config import cfg as config    
-    file_dep = list(config.get_url('output').rglob('*_survey_area_data_summary.csv'))
-    target = config.get_url('reports') /'image_coverage.csv'
+    file_dep = list(config.get_url('flights').rglob('*_survey_area_data_summary.csv'))
+    target = config.get_url('reports') / 'image_coverage.csv'
     return {
         'actions':[process_concat_check_survey],
         'file_dep':file_dep,
@@ -110,13 +108,13 @@ def task_plot_surveys():
         plotly.offline.plot(fig, filename=html_file,auto_open = False)
         fig.write_image(png_file)
     from turtledrone.config import cfg as config        
-    file_dep = list(config.get_url('output').rglob('*_survey_area_data.csv'))
-    targets = [os.path.join(config.get_url('reports'),'surveys.html'),
-               os.path.join(config.get_url('reports'),'surveys.png')]
+    file_dep = list(config.get_url('flights').rglob('*_survey_area_data.csv'))
+    targets = [config.get_url('reports')/'surveys.html',
+               config.get_url('reports')/'surveys.png']
                
     return {
 
-        'actions':[(process_survey, [],{'apikey':config.cfg['mapboxkey']})],
+        'actions':[(process_survey, [],{'apikey':config['mapboxkey']})],
         'file_dep':file_dep,
         'targets':targets,
         'clean':True,
@@ -169,7 +167,7 @@ def task_geopgk_survey():
 #            gdf.to_file(targets[0], driver="GPKG", layer=survey)
 
     from turtledrone.config import cfg as config   
-    file_dep = glob.glob(os.path.join(config.get_url('output'),config.cfg['country'],'**','*_survey_area_data.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(config.get_url('flights'),config['country'],'**','*_survey_area_data.csv'),recursive=True)
     for file in file_dep:
         target = os.path.splitext(os.path.basename(file))[0]+'.gpkg'
         target = os.path.join(config.get_url('reports'),target)
@@ -207,7 +205,7 @@ def task_html_report():
 
         
     from turtledrone.config import cfg as config
-    file_dep = glob.glob(os.path.join(config.get_url('output'),config.cfg['country'],'**','*_survey_area_data_summary.csv'),recursive=True)
+    file_dep = glob.glob(os.path.join(config.get_url('flights'),config['country'],'**','*_survey_area_data_summary.csv'),recursive=True)
     for file in file_dep:
         target = os.path.splitext(os.path.basename(file))[0]+'_report.html'
         target = os.path.join(config.get_url('reports'),target)
@@ -245,16 +243,60 @@ def task_html_report():
 #         'clean':True,
 #     } 
 def run():
+    """Run reports as a module with command line arguments."""
     import sys
-    from doit.cmd_base import ModuleTaskLoader, get_loader
+    from doit.cmd_base import ModuleTaskLoader
     from doit.doit_cmd import DoitMain
-    DOIT_CONFIG = {'check_file_uptodate': 'timestamp',"continue": True}
-    #print(globals())
+    DOIT_CONFIG = {'check_file_uptodate': 'timestamp', "continue": True}
     DoitMain(ModuleTaskLoader(globals())).run(sys.argv[1:]) 
         
 if __name__ == '__main__':
+    import sys
     import doit
-    DOIT_CONFIG = {'check_file_uptodate': 'timestamp'}
-    #print(globals())
+    
+    # Parse config file from command line arguments
+    config_file = None
+    for arg in sys.argv[1:]:
+        if arg.startswith('config='):
+            config_file = arg.split('=', 1)[1]
+        elif arg.startswith('--config='):
+            config_file = arg.split('=', 1)[1]
+        elif arg == '--config' or arg == '-c':
+            # Next argument should be the config file
+            idx = sys.argv.index(arg)
+            if idx + 1 < len(sys.argv):
+                config_file = sys.argv[idx + 1]
+    
+    if not config_file:
+        print("Error: Config file required. Use: config=/path/to/config.yaml or --config /path/to/config.yaml")
+        sys.exit(1)
+    
+    # Load the config before running tasks
+    print(f"Loading configuration from: {config_file}")
+    import turtledrone.config as config
+    config.read_config(Path(config_file), prompt_if_none=False)
+    print(f"Configuration loaded successfully")
+    
+    # Change working directory to config file's parent directory
+    config_dir = Path(config_file).parent.resolve()
+    os.chdir(config_dir)
+    print(f"Working directory: {config_dir}")
+    
+    # Set up per-config doit database file in the config directory
+    db_file = config_dir / ".doit_reports.db"
+    print(f"Using task database: {db_file}")
+    
+    # Configure doit
+    DOIT_CONFIG.update({
+        'check_file_uptodate': 'timestamp',
+        'num_processes': 10,
+        'verbosity': 2,
+        'db_file': str(db_file),
+    })
+    
+    # Clear command line args so doit runs all tasks
+    sys.argv = [sys.argv[0]]
+    
+    # Run doit with the task definitions (will run all tasks when no args provided)
     doit.run(globals())       
                     
