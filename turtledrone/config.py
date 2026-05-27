@@ -155,7 +155,12 @@ class Config:
                 )
             value = value.format(CATALOG_DIR=self.catalog_dir)
 
-        return Path(value)
+        path = Path(value).expanduser()
+
+        if not path.is_absolute() and self.catalog_dir is not None:
+            path = self.catalog_dir / path
+
+        return path.resolve(strict=False)
 
     def get_destination(self, file_path: str | Path) -> Path:
         """
